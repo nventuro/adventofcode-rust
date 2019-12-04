@@ -19,49 +19,99 @@ fn process(input: String) {
     let verb = 2;
 
     println!("With noun {} and verb {}, will run:\n{:?}", noun, verb, &program);
-    let initialized = initialize(program, noun, verb);
 
-    println!("Output:\n{:?}", run_program(initialized)[0]);
+    let mut computer = Computer::new(program, noun, verb);
+    computer.run();
+
+    println!("Output:\n{:?}", computer.result());
 }
 
-fn initialize(mut program: Vec<i32>, noun: i32, verb: i32) -> Vec<i32> {
-    program[1] = noun;
-    program[2] = verb;
-
-    program
+fn to_address(value: i32) -> usize {
+    value.try_into().unwrap()
 }
 
-fn run_program(mut program: Vec<i32>) -> Vec<i32> {
-    let mut instr_ptr: usize = 0;
+struct OpcodeAdd {
+    lhs_address: usize,
+    rhs_address: usize,
+    result_address: usize,
+}
 
-    while program[instr_ptr] != 99 {
-        program = run_opcode(program, instr_ptr);
-        instr_ptr += 4;
+impl OpcodeAdd {
+    fn new(computer: &Computer) -> OpcodeAdd {
+        assert!(computer.memory.len() >= computer.counter + 3); // 3 arguments
+
+        OpcodeAdd {
+            lhs_address: to_address(computer.memory[computer.counter + 1]),
+            rhs_address: to_address(computer.memory[computer.counter + 2]),
+            result_address: to_address(computer.memory[computer.counter + 3]),
+        }
     }
 
-    program
+    fn exec(&self, computer: &mut Computer) {
+        computer.memory[self.result_address] = computer.memory[self.lhs_address] + computer.memory[self.rhs_address];
+    }
 }
 
-fn run_opcode(mut program: Vec<i32>, instr_ptr: usize) -> Vec<i32> {
-    assert!(program.len() >= instr_ptr + 3); // each opcode has 3 arguments
+struct OpcodeMul {
+    lhs_address: usize,
+    rhs_address: usize,
+    result_address: usize,
+}
 
-    if program[instr_ptr] == 1 {
-        let lhs_index: usize = program[instr_ptr + 1].try_into().unwrap();
-        let rhs_index: usize = program[instr_ptr + 2].try_into().unwrap();
-        let result_index: usize = program[instr_ptr + 3].try_into().unwrap();
+impl OpcodeMul {
+    fn new(computer: &Computer) -> OpcodeMul {
+        assert!(computer.memory.len() >= computer.counter + 3); // 3 arguments
 
-        program[result_index] = program[lhs_index] + program[rhs_index];
-        program
+        OpcodeMul {
+            lhs_address: to_address(computer.memory[computer.counter + 1]),
+            rhs_address: to_address(computer.memory[computer.counter + 2]),
+            result_address: to_address(computer.memory[computer.counter + 3]),
+        }
+    }
 
-    } else if program[instr_ptr] == 2 {
-        let lhs_index: usize = program[instr_ptr + 1].try_into().unwrap();
-        let rhs_index: usize = program[instr_ptr + 2].try_into().unwrap();
-        let result_index: usize = program[instr_ptr + 3].try_into().unwrap();
+    fn exec(&self, computer: &mut Computer) {
+        computer.memory[self.result_address] = computer.memory[self.lhs_address] * computer.memory[self.rhs_address];
+    }
+}
 
-        program[result_index] = program[lhs_index] * program[rhs_index];
-        program
-    } else {
-        panic!("Unknown opcode: '{}'", program[instr_ptr]);
+struct Computer {
+    memory: Vec<i32>,
+    counter: usize,
+}
+
+impl Computer {
+    fn new(mut program: Vec<i32>, noun: i32, verb: i32) -> Computer {
+        program[1] = noun;
+        program[2] = verb;
+
+        Computer {
+            memory: program,
+            counter: 0,
+        }
+    }
+
+    fn run(&mut self) {
+        while self.memory[self.counter] != 99 {
+            self.step();
+        }
+    }
+
+    fn step(&mut self) {
+        let opcode = self.memory[self.counter];
+        if opcode == 1 {
+            OpcodeAdd::new(self).exec(self)
+        } else if opcode == 2 {
+            OpcodeMul::new(self).exec(self)
+        } else {
+            panic!("Unknown opcode: '{}'", opcode);
+        }
+
+        self.counter += 4;
+    }
+
+    fn result(&self) -> i32 {
+        assert!(self.memory[self.counter] == 99);
+        self.memory[0]
     }
 }
 
