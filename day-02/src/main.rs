@@ -121,21 +121,33 @@ mod tests {
 
     #[test]
     fn test_simple_add_opcode() {
-        assert_eq!(run_opcode([1,0,0,0].to_vec(), 0), [2,0,0,0].to_vec());
+        let mut computer = Computer { memory: [1,0,0,0].to_vec(),  counter: 0 };
+        computer.step();
+
+        assert_eq!(computer.memory, [2,0,0,0].to_vec());
+        assert_eq!(computer.counter, 4);
     }
 
     #[test]
     fn test_simple_mul_opcode() {
-        assert_eq!(run_opcode([2,3,0,3].to_vec(), 0), [2,3,0,6].to_vec());
+        let mut computer = Computer { memory: [2,3,0,3].to_vec(),  counter: 0 };
+        computer.step();
+
+        assert_eq!(computer.memory, [2,3,0,6].to_vec());
+        assert_eq!(computer.counter, 4);
     }
 
     #[test]
     fn test_complex_add_program() {
-        assert_eq!(run_program([1,1,1,4,99,5,6,0,99].to_vec()), [30,1,1,4,2,5,6,0,99].to_vec());
+        let mut computer = Computer::new([1,1,1,4,99,5,6,0,99].to_vec(), 1, 1);
+        computer.run();
+        assert_eq!(computer.memory, [30,1,1,4,2,5,6,0,99].to_vec());
     }
 
     #[test]
     fn test_complex_mul_program() {
-        assert_eq!(run_program([2,4,4,5,99,0].to_vec()), [2,4,4,5,99,9801].to_vec());
+        let mut computer = Computer::new([2,4,4,5,99,0].to_vec(), 4, 4);
+        computer.run();
+        assert_eq!(computer.memory, [2,4,4,5,99,9801].to_vec());
     }
 }
