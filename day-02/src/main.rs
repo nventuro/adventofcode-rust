@@ -15,15 +15,26 @@ fn process(input: String) {
         .map(|x| x.trim().parse::<i32>().unwrap())
         .collect();
 
-    let noun = 12;
-    let verb = 2;
+    let target = 19690720;
 
-    println!("With noun {} and verb {}, will run:\n{:?}", noun, verb, &program);
+    println!("Looking for combination of noun and verb...");
 
-    let mut computer = Computer::new(program, noun, verb);
-    computer.run();
+    for noun in 0..99 {
+        for verb in 0..99 {
+            let mut computer = Computer::new(program.clone(), noun, verb);
+            computer.run();
 
-    println!("Output:\n{:?}", computer.result());
+            let result = computer.result();
+
+            if result == target {
+                println!("Success!");
+                println!("Noun: {} Verb: {} Result: {}", noun, verb, result);
+                return
+            }
+        }
+    }
+
+    println!("Failed to find a combination of noun and verb that yields {}", target);
 }
 
 fn to_address(value: i32) -> usize {
