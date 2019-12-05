@@ -33,13 +33,13 @@ fn process(input: String) {
 
             match movement {
                 Movement::Horizontal(value) => {
-                    for _i in 1..value {
-                        wire_positions.push(Point::new(start.x + i32::from(value), start.y));
+                    for i in 1..value {
+                        wire_positions.push(Point::new(start.x + i, start.y));
                     }
                 },
                 Movement::Vertical(value) => {
-                    for _i in 1..value {
-                        wire_positions.push(Point::new(start.x, start.y + i32::from(value)));
+                    for i in 1..value {
+                        wire_positions.push(Point::new(start.x, start.y + i));
                     }
                 },
             }
@@ -50,13 +50,13 @@ fn process(input: String) {
 
     // Find intersections - go over the first wire, and check in all other wires if they also have that position
     assert!(wires_positions.len() >= 2);
+    println!("{}",  wires_positions[0].len());
+    println!("{}",  wires_positions[1].len());
 
     for first_wire_position in wires_positions.first().unwrap() {
-        for other_wire_positions in &wires_positions[1..] {
-            for other_wire_position in other_wire_positions {
-                if first_wire_position == other_wire_position {
-                    println!("match between two");
-                }
+        for other_wire_position in wires_positions[1].clone() {
+            if first_wire_position == other_wire_position {
+                println!("Match in {:?}", first_wire_position);
             }
         }
     }
@@ -81,6 +81,8 @@ impl Movement {
 
         let direction = text.chars().next().unwrap();
         let value = text[1..].parse::<i32>().unwrap();
+
+        assert!(value >= 1);
 
         match direction {
             // First quadrant coordinates: right and up are positive
