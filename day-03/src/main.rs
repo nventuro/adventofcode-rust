@@ -1,4 +1,5 @@
 use std::fs;
+use std::cmp;
 
 fn main() {
     let filename = "input";
@@ -12,52 +13,11 @@ fn main() {
 fn process(input: String) {
     // Parse input and get movements for each wire
 
-    let mut wires_movements = Vec::<Vec::<Movement>>::new();
+    let mut movements_per_wire = Vec::<Vec::<Movement>>::new();
     for line in input.split_whitespace() {
         if !line.is_empty() {
             // New wire
-            wires_movements.push(parse_wire_description(line));
-        }
-    }
-
-    // Compute positions for each wire
-
-    let mut wires_positions = Vec::<Vec::<Point>>::new();
-    for wire_movements in wires_movements {
-        // All wires start at 0,0
-        let mut wire_positions = vec![Point::new(0, 0)];
-
-        // Compute all positions for wire
-        for movement in wire_movements {
-            let start = wire_positions.last().unwrap().clone();
-
-            match movement {
-                Movement::Horizontal(value) => {
-                    for i in 1..value {
-                        wire_positions.push(Point::new(start.x + i, start.y));
-                    }
-                },
-                Movement::Vertical(value) => {
-                    for i in 1..value {
-                        wire_positions.push(Point::new(start.x, start.y + i));
-                    }
-                },
-            }
-        }
-
-        wires_positions.push(wire_positions);
-    }
-
-    // Find intersections - go over the first wire, and check in all other wires if they also have that position
-    assert!(wires_positions.len() >= 2);
-    println!("{}",  wires_positions[0].len());
-    println!("{}",  wires_positions[1].len());
-
-    for first_wire_position in wires_positions.first().unwrap() {
-        for other_wire_position in wires_positions[1].clone() {
-            if first_wire_position == other_wire_position {
-                println!("Match in {:?}", first_wire_position);
-            }
+            movements_per_wire.push(parse_wire_description(line));
         }
     }
 }
@@ -96,8 +56,6 @@ impl Movement {
 }
 
 #[derive(Debug)]
-#[derive(PartialEq)]
-#[derive(Clone)]
 struct Point {
     x: i32,
     y: i32,
@@ -106,6 +64,58 @@ struct Point {
 impl Point {
     fn new(x: i32, y: i32) -> Point {
         Point { x, y }
+    }
+}
+
+#[derive(Debug)]
+struct Vector {
+    start: Point,
+    length: i32,
+}
+
+#[derive(Debug)]
+enum Segment {
+    Horizontal(Vector),
+    Vertical(Vector),
+}
+
+impl Segment {
+    fn new(start: Point, movement: Movement) -> Segment {
+        match movement {
+            Movement::Horizontal(length) => Segment::Horizontal(Vector { start, length }),
+            Movement::Vertical(length) => Segment::Vertical(Vector { start, length })
+        }
+    }
+
+    fn end(self: &Segment) -> Point {
+        match self {
+            Segment::Horizontal(vector) =>
+                Point::new(vector.start.x + vector.length, vector.start.y),
+
+            Segment::Vertical(vector) =>
+                Point::new(vector.start.x, vector.start.y + vector.length),
+        }
+    }
+
+    fn intersects(self: &Segment, other: &Segment) -> bool {
+        use Segment::*;
+        match (self, other) {
+            (Horizontal(a), Horizontal(b)) => {
+                true
+            },
+
+            (Horizontal(a), Vertical(b)) => {
+                a.start.y > std::cmp::min(b.start.y, b.end().y)
+            },
+
+            (Vertical(a), Horizontal(b)) => {
+                true
+            },
+
+            (Vertical(a), Vertical(b)) => {
+                true
+            },
+        }
     }
 }
 
