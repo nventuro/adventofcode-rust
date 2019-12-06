@@ -20,6 +20,36 @@ fn process(input: String) {
             movements_per_wire.push(parse_wire_description(line));
         }
     }
+
+    // Create wire vectors
+    let mut vectors_per_wire = Vec::<Vec::<Vector>>::new();
+    for wire_movements in movements_per_wire {
+        let mut wire_vectors = Vec::<Vector>::new();
+
+        for movement in wire_movements {
+            match wire_vectors.last() {
+                None => wire_vectors.push(Vector::new(Point::new(0, 0), movement)),
+                Some(last) => {
+                    let last_end = last.end(); // prevent mutable_borrow_reservation_conflict
+                    wire_vectors.push(Vector::new(last_end, movement))
+                },
+            }
+        }
+
+        vectors_per_wire.push(wire_vectors);
+    }
+
+    assert!(vectors_per_wire.len() >= 2);
+
+    for first_wire_vector in &vectors_per_wire[0] {
+        for other_wire_vectors in &vectors_per_wire[1..] {
+            for other_wire_vector in other_wire_vectors {
+                if first_wire_vector.intersects(other_wire_vector) {
+                    println!("match!");
+                }
+            }
+        }
+    }
 }
 
 fn parse_wire_description(description: &str) -> Vec<Movement> {
@@ -68,54 +98,86 @@ impl Point {
 }
 
 #[derive(Debug)]
-struct Vector {
-    start: Point,
-    length: i32,
+#[derive(PartialEq)]
+enum Direction {
+    Horizontal,
+    Vertical,
 }
 
 #[derive(Debug)]
-enum Segment {
-    Horizontal(Vector),
-    Vertical(Vector),
+struct Vector {
+    start: Point,
+    length: i32,
+    direction: Direction,
 }
 
-impl Segment {
-    fn new(start: Point, movement: Movement) -> Segment {
+
+impl Vector {
+    fn new(start: Point, movement: Movement) -> Vector {
         match movement {
-            Movement::Horizontal(length) => Segment::Horizontal(Vector { start, length }),
-            Movement::Vertical(length) => Segment::Vertical(Vector { start, length })
+            Movement::Horizontal(length) => Vector{ start, length, direction: Direction::Horizontal },
+            Movement::Vertical(length) => Vector{ start, length, direction: Direction::Vertical },
         }
     }
 
-    fn end(self: &Segment) -> Point {
-        match self {
-            Segment::Horizontal(vector) =>
-                Point::new(vector.start.x + vector.length, vector.start.y),
+    fn end(&self) -> Point {
+        match self.direction {
+            Direction::Horizontal =>
+                Point::new(self.start.x + self.length, self.start.y),
 
-            Segment::Vertical(vector) =>
-                Point::new(vector.start.x, vector.start.y + vector.length),
+            Direction::Vertical =>
+                Point::new(self.start.x, self.start.y + self.length),
         }
     }
 
-    fn intersects(self: &Segment, other: &Segment) -> bool {
-        use Segment::*;
-        match (self, other) {
-            (Horizontal(a), Horizontal(b)) => {
-                true
+    fn intersects(&self, other: &Vector) -> bool {
+        use Direction::*;
+
+        match (&self.direction, &other.direction) {
+            (Horizontal, Horizontal) => {
+                self.start.y == other.start.y && (
+                    // We need to check for both containing one point of the
+                    // other to account for scenarios where one vector contains
+                    // the other one completely
+                    self.contains_x(other.start.x) ||
+                    self.contains_x(other.end().x) ||
+                    other.contains_x(self.start.x) ||
+                    other.contains_x(self.end().x)
+                )
             },
 
-            (Horizontal(a), Vertical(b)) => {
-                a.start.y > std::cmp::min(b.start.y, b.end().y)
+            (Horizontal, Vertical) => {
+                self.contains_x(other.start.x) && other.contains_y(self.start.y)
             },
 
-            (Vertical(a), Horizontal(b)) => {
-                true
+            (Vertical, Horizontal) => {
+                other.intersects(self)
             },
 
-            (Vertical(a), Vertical(b)) => {
-                true
+            (Vertical, Vertical) => {
+                // Same as Horizontal, Horizontal
+                self.start.x == other.start.x && (
+                    self.contains_y(other.start.y) ||
+                    self.contains_y(other.end().y) ||
+                    other.contains_y(self.start.y) ||
+                    other.contains_y(self.end().y)
+                )
             },
         }
+    }
+
+    fn contains_x(&self, x: i32) -> bool {
+        assert_eq!(self.direction, Direction::Horizontal);
+
+        x >= cmp::min(self.start.x, self.end().x) &&
+        x <= cmp::max(self.start.x, self.end().x)
+    }
+
+    fn contains_y(&self, y: i32) -> bool {
+        assert_eq!(self.direction, Direction::Vertical);
+
+        y >= cmp::min(self.start.y, self.end().y) &&
+        y <= cmp::max(self.start.y, self.end().y)
     }
 }
 
@@ -137,5 +199,19 @@ mod tests {
             parse_wire_description("U123,D14,R5"),
             vec![Movement::Vertical(123), Movement::Vertical(-14), Movement::Horizontal(5)]
         );
+    }
+
+    #[test]
+    fn test_vector_cross_intersection_none() {
+        let horizontal = Vector::new(Point::new(1, 0), Movement::Horizontal(3));
+        let vertical = Vector::new(Point::new(0, 1), Movement::Vertical(3));
+        assert_eq!(horizontal.intersects(&vertical), false);
+    }
+
+    #[test]
+    fn test_vector_cross_intersection_single() {
+        let horizontal = Vector::new(Point::new(0, 0), Movement::Horizontal(3));
+        let vertical = Vector::new(Point::new(1, -1), Movement::Vertical(3));
+        assert_eq!(horizontal.intersects(&vertical), true);
     }
 }
