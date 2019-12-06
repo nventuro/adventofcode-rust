@@ -1,5 +1,7 @@
 use std::convert::TryFrom;
 use std::convert::TryInto;
+use std::io;
+use std::io::Write;
 
 pub struct Hardware {
   memory: Vec<i32>,
@@ -36,6 +38,8 @@ impl Hardware {
   }
 
   pub fn run(&mut self) {
+    println!("BEGIN");
+
     loop {
       if self.step() == Instruction::Halt {
         break;
@@ -73,6 +77,8 @@ impl Hardware {
 enum Instruction {
   Add,
   Mul,
+  Prompt,
+  Print,
   Halt,
 }
 
@@ -115,6 +121,8 @@ impl TryFrom<i32> for Instruction {
         match x {
           1 => Ok(Instruction::Add),
           2 => Ok(Instruction::Mul),
+          3 => Ok(Instruction::Prompt),
+          4 => Ok(Instruction::Print),
           99 => Ok(Instruction::Halt),
           _ => Err(x),
         }
@@ -129,6 +137,8 @@ impl Instruction {
     match self {
       Instruction::Add => vec![In, In, Out],
       Instruction::Mul => vec![In, In, Out],
+      Instruction::Prompt => vec![Out],
+      Instruction::Print => vec![In],
       Instruction::Halt => vec![],
     }
   }
@@ -150,7 +160,18 @@ impl Instruction {
 
         hardware.write(result, lhs * rhs);
       },
-      Instruction::Halt => { println!("HALT"); },
+      Instruction::Prompt => {
+        print!("PROMPT: ");
+        io::stdout().flush().unwrap();
+
+        hardware.write(parameters[0].get_output(), read!());
+      },
+      Instruction::Print => {
+        println!("PRINT: {}", parameters[0].get_input());
+      },
+      Instruction::Halt => {
+        println!("HALT");
+      },
     }
   }
 }

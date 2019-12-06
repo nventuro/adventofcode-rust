@@ -1,6 +1,8 @@
-use std::fs;
+#[macro_use] extern crate text_io;
 
 mod computer;
+
+use std::fs;
 
 fn main() {
     let filename = "input";
