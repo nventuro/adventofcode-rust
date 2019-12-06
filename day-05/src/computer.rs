@@ -1,7 +1,5 @@
-use std::convert::TryFrom;
-use std::convert::TryInto;
-use std::io;
-use std::io::Write;
+use std::convert::{ TryFrom, TryInto };
+use std::io::{ self, Write };
 
 pub struct Hardware {
   memory: Vec<i32>,
@@ -164,7 +162,10 @@ impl Instruction {
         print!("PROMPT: ");
         io::stdout().flush().unwrap();
 
-        hardware.write(parameters[0].get_output(), read!());
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+
+        hardware.write(parameters[0].get_output(), input.trim().parse::<i32>().unwrap());
       },
       Instruction::Print => {
         println!("PRINT: {}", parameters[0].get_input());
