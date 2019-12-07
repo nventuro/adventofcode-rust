@@ -1,9 +1,21 @@
 use std::convert::{ TryFrom, TryInto };
 use std::io::{ self, Write };
 
+type Address = usize;
+
+pub trait AddressLike {
+  fn from_value(value: i32) -> Address;
+}
+
+impl AddressLike for Address {
+  fn from_value(value: i32) -> Address {
+    value.try_into().expect("Value is not an address")
+  }
+}
+
 pub struct Hardware {
   memory: Vec<i32>,
-  program_counter: usize,
+  program_counter: Address,
 }
 
 impl Hardware {
@@ -14,28 +26,28 @@ impl Hardware {
     }
   }
 
-  fn read(&self, address: usize) -> i32 {
-    self.memory[address]
+  fn read(&self, location: Address) -> i32 {
+    self.memory[location]
   }
 
-  fn write(&mut self, address: usize, value: i32) {
-    self.memory[address] = value;
+  fn write(&mut self, location: Address, value: i32) {
+    self.memory[location] = value;
   }
 
   fn next_instruction(&self) -> Instruction {
     self.read(self.program_counter).try_into().expect("Unknown opcode")
   }
 
-  // Reads the value of the nth parameter for the current instruction (0-based)
-  fn parameter(&self, nth: usize) -> (i32, ArgumentMode) {
+  // Reads the value of the nth argument for the current instruction (0-based)
+  fn argument(&self, nth: usize) -> (i32, ArgumentMode) {
     let value = self.read(self.program_counter + nth + 1);
 
     // In a string representation, the last two digits of the instruction value
-    // are the opcodes (i.e. opcodes go from 0 to 99). We first remove those.
+    // are the opcode (i.e. opcodes go from 0 to 99). We first remove those.
     let mode_indicators = self.read(self.program_counter) / 100;
 
-    // Then, the mode for the 0-based nth parameter is the nth digit from the
-    // right: the first parameter is the units, second tenths, and so on.
+    // Then, the mode for the 0-based nth argument is the nth digit from the
+    // right: the first argument is the units, second tenths, and so on.
     let mode_indicator = (mode_indicators / 10_i32.pow(nth.try_into().unwrap())) % 10;
 
     let mode = mode_indicator.try_into().unwrap();
@@ -60,36 +72,36 @@ impl Hardware {
   fn step(&mut self) -> Instruction {
     let instruction = self.next_instruction();
 
-    // Collect parameters
-    let parameters: Vec<Parameter> = instruction.parameter_types()
+    // Collect arguments
+    let arguments: Vec<Argument> = instruction.argument_types()
       .iter()
       .enumerate()
-      .map(|(index, parameter_type)| {
-        let (argument, mode) = self.parameter(index);
+      .map(|(index, argument_type)| {
+        let (value, mode) = self.argument(index);
 
-        match parameter_type {
-          ParameterType::In => {
-            Parameter::In(
+        match argument_type {
+          ArgumentType::In => {
+            Argument::In(
               match mode {
-                ArgumentMode::Immediate => argument,
-                ArgumentMode::Indexed => self.read(to_address(argument)),
+                ArgumentMode::Immediate => value,
+                ArgumentMode::Indexed => self.read(Address::from_value(value)),
               }
             )
           },
-          ParameterType::Out => {
-            // Out parameters can only be indexed
+          ArgumentType::Out => {
+            // Out arguments can only be indexed
             assert_eq!(mode, ArgumentMode::Indexed);
 
-            Parameter::Out(to_address(argument))
+            Argument::Out(Address::from_value(value))
           },
         }
       }).collect();
 
     // Run instruction
-    instruction.exec(&parameters, self);
+    instruction.exec(&arguments, self);
 
-    // Consume opcode and its parameters
-    self.relative_jump_forward(1 + parameters.len());
+    // Consume opcode and its arguments
+    self.relative_jump_forward(1 + arguments.len());
 
     instruction
   }
@@ -106,17 +118,10 @@ enum Instruction {
   Halt,
 }
 
-// An instruction's parameters may be in-values (read from) or out-values (written to)
-enum ParameterType {
+// An instruction's arguments may be in-values (read from) or out-values (written to)
+enum ArgumentType {
   In,
   Out,
-}
-
-// In-values are just values, while out-values are addresses (where a value is stored)
-#[derive(Debug)]
-enum Parameter {
-  In(i32),
-  Out(usize),
 }
 
 #[derive(PartialEq)]
@@ -124,6 +129,15 @@ enum Parameter {
 enum ArgumentMode {
   Immediate, // The value itself is the argument
   Indexed, // The value is the address of the argument
+}
+
+// In-values are just values, while out-values are addresses (where a value is stored).
+// Note that this means that in-arguments in indexed mode must first be dereferenced
+// to be used as an Argument.
+#[derive(Debug)]
+enum Argument {
+  In(i32),
+  Out(Address),
 }
 
 // Map indicators to argument modes
@@ -139,20 +153,20 @@ impl TryFrom<i32> for ArgumentMode {
     }
 }
 
-impl Parameter {
+impl Argument {
   // Extracts in-value or fails
   fn get_input(&self) -> i32 {
     match self {
-      Parameter::In(input) => *input,
-      _ => panic!("Non-input parameter: {:?}", self),
+      Argument::In(input) => *input,
+      _ => panic!("Non-input argument: {:?}", self),
     }
   }
 
   // Extracts out-value or fails
-  fn get_output(&self) -> usize {
+  fn get_output(&self) -> Address {
     match self {
-      Parameter::Out(output) => *output,
-      _ => panic!("Non-output parameter: {:?}", self),
+      Argument::Out(output) => *output,
+      _ => panic!("Non-output argument: {:?}", self),
     }
   }
 }
@@ -175,9 +189,9 @@ impl TryFrom<i32> for Instruction {
 }
 
 impl Instruction {
-  // Map each instruction to its parameter types
-  fn parameter_types(&self) -> Vec<ParameterType> {
-    use ParameterType::*;
+  // Map each instruction to its argument types
+  fn argument_types(&self) -> Vec<ArgumentType> {
+    use ArgumentType::*;
 
     match self {
       Instruction::Add => vec![In, In, Out],
@@ -189,43 +203,40 @@ impl Instruction {
   }
 
   // Execute an instruction on a hardware
-  fn exec(&self, parameters: &[Parameter], hardware: &mut Hardware) {
+  fn exec(&self, arguments: &[Argument], hardware: &mut Hardware) {
     match self {
       Instruction::Add => {
-        let lhs = parameters[0].get_input();
-        let rhs = parameters[1].get_input();
-        let result = parameters[2].get_output();
+        let lhs = arguments[0].get_input();
+        let rhs = arguments[1].get_input();
+        let destination = arguments[2].get_output();
 
-        hardware.write(result, lhs + rhs);
+        hardware.write(destination, lhs + rhs);
       },
       Instruction::Mul => {
-        let lhs = parameters[0].get_input();
-        let rhs = parameters[1].get_input();
-        let result = parameters[2].get_output();
+        let lhs = arguments[0].get_input();
+        let rhs = arguments[1].get_input();
+        let destination = arguments[2].get_output();
 
-        hardware.write(result, lhs * rhs);
+        hardware.write(destination, lhs * rhs);
       },
       Instruction::Prompt => {
         print!("PROMPT: ");
         io::stdout().flush().unwrap();
 
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
+        let mut raw_input = String::new();
+        io::stdin().read_line(&mut raw_input).unwrap();
+        let input = raw_input.trim().parse::<i32>().unwrap();
 
-        hardware.write(parameters[0].get_output(), input.trim().parse::<i32>().unwrap());
+        hardware.write(arguments[0].get_output(), input);
       },
       Instruction::Print => {
-        println!("PRINT: {}", parameters[0].get_input());
+        println!("PRINT: {}", arguments[0].get_input());
       },
       Instruction::Halt => {
         println!("HALT");
       },
     }
   }
-}
-
-fn to_address(value: i32) -> usize {
-    value.try_into().expect("Value is not an address")
 }
 
 #[cfg(test)]
