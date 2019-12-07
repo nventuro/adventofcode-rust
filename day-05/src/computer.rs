@@ -234,7 +234,7 @@ impl Instruction {
       Add | Mul | LessThan | Equals => {
         // Implements an instruction that consists of a binary operation that
         // writes its result to memory
-        let mut write_binary_operation = |operation: &dyn Fn(i32, i32) -> i32| {
+        let mut write_binary_operation = |operation: fn(i32, i32) -> i32| {
           let lhs = arguments[0].get_input();
           let rhs = arguments[1].get_input();
           let destination = arguments[2].get_output();
@@ -243,17 +243,17 @@ impl Instruction {
         };
 
         match self {
-          Add => write_binary_operation(&|lhs, rhs| lhs + rhs),
-          Mul => write_binary_operation(&|lhs, rhs| lhs * rhs),
-          LessThan => write_binary_operation(&|lhs, rhs| if lhs < rhs { 1 } else { 0 }),
-          Equals => write_binary_operation(&|lhs, rhs| if lhs == rhs { 1 } else { 0 }),
+          Add => write_binary_operation(|lhs, rhs| lhs + rhs),
+          Mul => write_binary_operation(|lhs, rhs| lhs * rhs),
+          LessThan => write_binary_operation(|lhs, rhs| if lhs < rhs { 1 } else { 0 }),
+          Equals => write_binary_operation(|lhs, rhs| if lhs == rhs { 1 } else { 0 }),
           _ => unreachable!("Missing match for binary instruction {:?}", self),
         }
       },
       JumpIfTrue | JumpIfFalse => {
         // Implements an instruction that performs an absolute jump if a
         // function applied on a value is true
-        let mut jump_if = |condition: &dyn Fn(i32) -> bool| {
+        let mut jump_if = |condition: fn(i32) -> bool| {
           let value = arguments[0].get_input();
           let destination = Address::from_value(arguments[1].get_input());
 
@@ -263,8 +263,8 @@ impl Instruction {
         };
 
         match self {
-          JumpIfTrue => jump_if(&|value| value != 0),
-          JumpIfFalse => jump_if(&|value| value == 0),
+          JumpIfTrue => jump_if(|value| value != 0),
+          JumpIfFalse => jump_if(|value| value == 0),
           _ => unreachable!("Missing match for conditional jump instruction {:?}", self),
         }
       },
