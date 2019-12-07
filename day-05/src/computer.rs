@@ -224,20 +224,22 @@ impl Instruction {
 
   // Execute an instruction on a hardware
   fn exec(&self, arguments: &[Argument], hardware: &mut Hardware) {
+    // Implements an instruction that consists of a binary operation that writes
+    // its result to memory
+    let mut write_binary_operation = |operation: &dyn Fn(i32, i32) -> i32 | {
+      let lhs = arguments[0].get_input();
+      let rhs = arguments[1].get_input();
+      let destination = arguments[2].get_output();
+
+      hardware.write(destination, operation(lhs, rhs));
+    };
+
     match self {
       Instruction::Add => {
-        let lhs = arguments[0].get_input();
-        let rhs = arguments[1].get_input();
-        let destination = arguments[2].get_output();
-
-        hardware.write(destination, lhs + rhs);
+        write_binary_operation(&|lhs, rhs| lhs + rhs);
       },
       Instruction::Mul => {
-        let lhs = arguments[0].get_input();
-        let rhs = arguments[1].get_input();
-        let destination = arguments[2].get_output();
-
-        hardware.write(destination, lhs * rhs);
+        write_binary_operation(&|lhs, rhs| lhs * rhs);
       },
       Instruction::Prompt => {
         print!("PROMPT: ");
@@ -269,18 +271,10 @@ impl Instruction {
         }
       },
       Instruction::LessThan => {
-        let lhs = arguments[0].get_input();
-        let rhs = arguments[1].get_input();
-        let destination = arguments[2].get_output();
-
-        hardware.write(destination, if lhs < rhs { 1 } else { 0 });
+        write_binary_operation(&|lhs, rhs| if lhs < rhs { 1 } else { 0 });
       },
       Instruction::Equals => {
-        let lhs = arguments[0].get_input();
-        let rhs = arguments[1].get_input();
-        let destination = arguments[2].get_output();
-
-        hardware.write(destination, if lhs == rhs { 1 } else { 0 });
+        write_binary_operation(&|lhs, rhs| if lhs == rhs { 1 } else { 0 });
       },
       Instruction::Halt => {
         println!("HALT");
