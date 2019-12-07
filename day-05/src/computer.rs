@@ -59,6 +59,10 @@ impl Hardware {
     self.program_counter += distance;
   }
 
+  fn absolute_jump(&mut self, destination: usize) {
+    self.program_counter = destination;
+  }
+
   pub fn run(&mut self) {
     println!("BEGIN");
 
@@ -70,6 +74,7 @@ impl Hardware {
   }
 
   fn step(&mut self) -> Instruction {
+    let current_program_counter = self.program_counter;
     let instruction = self.next_instruction();
 
     // Collect arguments
@@ -100,8 +105,11 @@ impl Hardware {
     // Run instruction
     instruction.exec(&arguments, self);
 
-    // Consume opcode and its arguments
-    self.relative_jump_forward(1 + arguments.len());
+    // Move forward by consuming opcode and its arguments, but only if the
+    // instruction didn't already change the program counter
+    if current_program_counter == self.program_counter {
+      self.relative_jump_forward(1 + arguments.len());
+    }
 
     instruction
   }
@@ -115,6 +123,10 @@ enum Instruction {
   Mul,
   Prompt,
   Print,
+  JumpIfTrue,
+  JumpIfFalse,
+  LessThan,
+  Equals,
   Halt,
 }
 
@@ -182,6 +194,10 @@ impl TryFrom<i32> for Instruction {
           2 => Ok(Instruction::Mul),
           3 => Ok(Instruction::Prompt),
           4 => Ok(Instruction::Print),
+          5 => Ok(Instruction::JumpIfTrue),
+          6 => Ok(Instruction::JumpIfFalse),
+          7 => Ok(Instruction::LessThan),
+          8 => Ok(Instruction::Equals),
           99 => Ok(Instruction::Halt),
           _ => Err(x),
         }
@@ -198,6 +214,10 @@ impl Instruction {
       Instruction::Mul => vec![In, In, Out],
       Instruction::Prompt => vec![Out],
       Instruction::Print => vec![In],
+      Instruction::JumpIfTrue => vec![In, In],
+      Instruction::JumpIfFalse => vec![In, In],
+      Instruction::LessThan => vec![In, In, Out],
+      Instruction::Equals => vec![In, In, Out],
       Instruction::Halt => vec![],
     }
   }
@@ -231,6 +251,36 @@ impl Instruction {
       },
       Instruction::Print => {
         println!("PRINT: {}", arguments[0].get_input());
+      },
+      Instruction::JumpIfTrue => {
+        let expression = arguments[0].get_input();
+        let destination = Address::from_value(arguments[1].get_input());
+
+        if expression != 0 {
+          hardware.absolute_jump(destination);
+        }
+      },
+      Instruction::JumpIfFalse => {
+        let expression = arguments[0].get_input();
+        let destination = Address::from_value(arguments[1].get_input());
+
+        if expression == 0 {
+          hardware.absolute_jump(destination);
+        }
+      },
+      Instruction::LessThan => {
+        let lhs = arguments[0].get_input();
+        let rhs = arguments[1].get_input();
+        let destination = arguments[2].get_output();
+
+        hardware.write(destination, if lhs < rhs { 1 } else { 0 });
+      },
+      Instruction::Equals => {
+        let lhs = arguments[0].get_input();
+        let rhs = arguments[1].get_input();
+        let destination = arguments[2].get_output();
+
+        hardware.write(destination, if lhs == rhs { 1 } else { 0 });
       },
       Instruction::Halt => {
         println!("HALT");
