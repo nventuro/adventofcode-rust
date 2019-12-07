@@ -224,24 +224,47 @@ impl Instruction {
 
   // Execute an instruction on a hardware
   fn exec(&self, arguments: &[Argument], hardware: &mut Hardware) {
-    // Implements an instruction that consists of a binary operation that writes
-    // its result to memory
-    let mut write_binary_operation = |operation: &dyn Fn(i32, i32) -> i32 | {
-      let lhs = arguments[0].get_input();
-      let rhs = arguments[1].get_input();
-      let destination = arguments[2].get_output();
-
-      hardware.write(destination, operation(lhs, rhs));
-    };
+    use Instruction::*;
 
     match self {
-      Instruction::Add => {
-        write_binary_operation(&|lhs, rhs| lhs + rhs);
+      Add | Mul | LessThan | Equals => {
+        // Implements an instruction that consists of a binary operation that
+        // writes its result to memory
+        let mut write_binary_operation = |operation: &dyn Fn(i32, i32) -> i32| {
+          let lhs = arguments[0].get_input();
+          let rhs = arguments[1].get_input();
+          let destination = arguments[2].get_output();
+
+          hardware.write(destination, operation(lhs, rhs));
+        };
+
+        match self {
+          Add => write_binary_operation(&|lhs, rhs| lhs + rhs),
+          Mul => write_binary_operation(&|lhs, rhs| lhs * rhs),
+          LessThan => write_binary_operation(&|lhs, rhs| if lhs < rhs { 1 } else { 0 }),
+          Equals => write_binary_operation(&|lhs, rhs| if lhs == rhs { 1 } else { 0 }),
+          _ => unreachable!("Missing match for binary instruction {:?}", self),
+        }
       },
-      Instruction::Mul => {
-        write_binary_operation(&|lhs, rhs| lhs * rhs);
+      JumpIfTrue | JumpIfFalse => {
+        // Implements an instruction that performs an absolute jump if a
+        // function applied on a value is true
+        let mut jump_if = |condition: &dyn Fn(i32) -> bool| {
+          let value = arguments[0].get_input();
+          let destination = Address::from_value(arguments[1].get_input());
+
+          if condition(value) {
+            hardware.absolute_jump(destination);
+          }
+        };
+
+        match self {
+          JumpIfTrue => jump_if(&|value| value != 0),
+          JumpIfFalse => jump_if(&|value| value == 0),
+          _ => unreachable!("Missing match for conditional jump instruction {:?}", self),
+        }
       },
-      Instruction::Prompt => {
+      Prompt => {
         print!("PROMPT: ");
         io::stdout().flush().unwrap();
 
@@ -251,32 +274,10 @@ impl Instruction {
 
         hardware.write(arguments[0].get_output(), input);
       },
-      Instruction::Print => {
+      Print => {
         println!("PRINT: {}", arguments[0].get_input());
       },
-      Instruction::JumpIfTrue => {
-        let expression = arguments[0].get_input();
-        let destination = Address::from_value(arguments[1].get_input());
-
-        if expression != 0 {
-          hardware.absolute_jump(destination);
-        }
-      },
-      Instruction::JumpIfFalse => {
-        let expression = arguments[0].get_input();
-        let destination = Address::from_value(arguments[1].get_input());
-
-        if expression == 0 {
-          hardware.absolute_jump(destination);
-        }
-      },
-      Instruction::LessThan => {
-        write_binary_operation(&|lhs, rhs| if lhs < rhs { 1 } else { 0 });
-      },
-      Instruction::Equals => {
-        write_binary_operation(&|lhs, rhs| if lhs == rhs { 1 } else { 0 });
-      },
-      Instruction::Halt => {
+      Halt => {
         println!("HALT");
       },
     }
