@@ -1,7 +1,6 @@
 mod computer;
 
 use std::fs;
-use std::io::{ self, Write };
 
 fn main() {
     let filename = "input";
@@ -17,19 +16,6 @@ fn process(input: String) {
         .map(|x| x.trim().parse::<i32>().unwrap())
         .collect();
 
-    let mut computer = computer::Hardware::new(program, prompt, print);
+    let mut computer = computer::Hardware::new_with_terminal(program);
     computer.run();
-}
-
-fn prompt() -> i32 {
-    print!("PROMPT: ");
-    io::stdout().flush().unwrap();
-
-    let mut raw_input = String::new();
-    io::stdin().read_line(&mut raw_input).unwrap();
-    raw_input.trim().parse::<i32>().unwrap()
-}
-
-fn print(value: i32) {
-    println!("PRINT: {}", value);
 }

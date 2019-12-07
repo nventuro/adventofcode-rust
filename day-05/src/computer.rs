@@ -1,4 +1,5 @@
 use std::convert::{ TryFrom, TryInto };
+use std::io::{ self, Write };
 
 type Address = usize;
 
@@ -20,6 +21,10 @@ pub struct Hardware<'a> {
 }
 
 impl<'a> Hardware<'a> {
+  pub fn new_with_terminal(program: Vec<i32>) -> Hardware<'a> {
+    Hardware::new(program, Hardware::prompt, Hardware::print)
+  }
+
   pub fn new
     <OutputFn: 'a + FnMut(i32), InputFn: 'a + FnMut() -> i32>
     (program: Vec<i32>, input: InputFn, output: OutputFn) -> Hardware<'a>
@@ -31,6 +36,20 @@ impl<'a> Hardware<'a> {
       output: Box::new(output),
     }
   }
+
+  fn prompt() -> i32 {
+      print!("PROMPT: ");
+      io::stdout().flush().unwrap();
+
+      let mut raw_input = String::new();
+      io::stdin().read_line(&mut raw_input).unwrap();
+      raw_input.trim().parse::<i32>().unwrap()
+  }
+
+  fn print(value: i32) {
+      println!("PRINT: {}", value);
+  }
+
 
   fn read(&self, location: Address) -> i32 {
     self.memory[location]
@@ -296,48 +315,48 @@ impl Instruction {
   }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-//     #[test]
-//     fn test_simple_add_instruction() {
-//       let mut computer = Hardware::new(vec![1,0,0,0]);
-//       let instruction = computer.step();
+    #[test]
+    fn test_simple_add_instruction() {
+      let mut computer = Hardware::new_with_terminal(vec![1,0,0,0]);
+      let instruction = computer.step();
 
-//       assert_eq!(instruction, Instruction::Add);
-//       assert_eq!(computer.memory, vec![2,0,0,0]);
-//       assert_eq!(computer.program_counter, 4);
-//     }
+      assert_eq!(instruction, Instruction::Add);
+      assert_eq!(computer.memory, vec![2,0,0,0]);
+      assert_eq!(computer.program_counter, 4);
+    }
 
-//     #[test]
-//     fn test_simple_mul_instruction() {
-//       let mut computer = Hardware::new(vec![2,3,0,3]);
-//       let instruction = computer.step();
+    #[test]
+    fn test_simple_mul_instruction() {
+      let mut computer = Hardware::new_with_terminal(vec![2,3,0,3]);
+      let instruction = computer.step();
 
-//       assert_eq!(instruction, Instruction::Mul);
-//       assert_eq!(computer.memory, vec![2,3,0,6]);
-//       assert_eq!(computer.program_counter, 4);
-//     }
+      assert_eq!(instruction, Instruction::Mul);
+      assert_eq!(computer.memory, vec![2,3,0,6]);
+      assert_eq!(computer.program_counter, 4);
+    }
 
-//     #[test]
-//     fn test_add_program() {
-//         let mut computer = Hardware::new(vec![1,1,1,4,99,5,6,0,99]);
-//         computer.run();
-//         assert_eq!(computer.memory, vec![30,1,1,4,2,5,6,0,99]);
-//     }
+    #[test]
+    fn test_add_program() {
+        let mut computer = Hardware::new_with_terminal(vec![1,1,1,4,99,5,6,0,99]);
+        computer.run();
+        assert_eq!(computer.memory, vec![30,1,1,4,2,5,6,0,99]);
+    }
 
-//     #[test]
-//     fn test_mul_program() {
-//         let mut computer = Hardware::new(vec![2,4,4,5,99,0]);
-//         computer.run();
-//         assert_eq!(computer.memory, vec![2,4,4,5,99,9801]);
-//     }
+    #[test]
+    fn test_mul_program() {
+        let mut computer = Hardware::new_with_terminal(vec![2,4,4,5,99,0]);
+        computer.run();
+        assert_eq!(computer.memory, vec![2,4,4,5,99,9801]);
+    }
 
-//     #[test]
-//     fn test_mul_program_argument_modes() {
-//         let mut computer = Hardware::new(vec![1002,4,3,4,33]);
-//         computer.run();
-//         assert_eq!(computer.memory, vec![1002,4,3,4,99]);
-//     }
-// }
+    #[test]
+    fn test_mul_program_argument_modes() {
+        let mut computer = Hardware::new_with_terminal(vec![1002,4,3,4,33]);
+        computer.run();
+        assert_eq!(computer.memory, vec![1002,4,3,4,99]);
+    }
+}
