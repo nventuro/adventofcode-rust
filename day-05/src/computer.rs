@@ -38,10 +38,16 @@ impl Hardware {
     self.read(self.program_counter).try_into().expect("Unknown opcode")
   }
 
-  // Reads the value of the nth argument for the current instruction (0-based)
   fn argument(&self, nth: usize) -> (i32, ArgumentMode) {
-    let value = self.read(self.program_counter + nth + 1);
+    (self.argument_value(nth), self.argument_mode(nth))
+  }
 
+  // Reads the value of the nth argument for the current instruction (0-based)
+  fn argument_value(&self, nth: usize) -> i32 {
+    self.read(self.program_counter + nth + 1)
+  }
+
+  fn argument_mode(&self, nth: usize) -> ArgumentMode {
     // In a string representation, the last two digits of the instruction value
     // are the opcode (i.e. opcodes go from 0 to 99). We first remove those.
     let mode_indicators = self.read(self.program_counter) / 100;
@@ -50,9 +56,7 @@ impl Hardware {
     // right: the first argument is the units, second tenths, and so on.
     let mode_indicator = (mode_indicators / 10_i32.pow(nth.try_into().unwrap())) % 10;
 
-    let mode = mode_indicator.try_into().unwrap();
-
-    (value, mode)
+    mode_indicator.try_into().unwrap()
   }
 
   fn relative_jump_forward(&mut self, distance: usize) {
