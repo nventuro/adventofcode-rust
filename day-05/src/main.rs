@@ -16,6 +16,6 @@ fn process(input: String) {
         .map(|x| x.trim().parse::<i32>().unwrap())
         .collect();
 
-    let mut computer = computer::Hardware::new_with_terminal(program);
+    let mut computer = computer::Computer::new_with_terminal(program);
     computer.run();
 }

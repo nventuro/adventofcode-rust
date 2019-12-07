@@ -1,7 +1,7 @@
-use std::convert::{ TryFrom, TryInto };
+use core::convert::{ TryFrom, TryInto };
 use std::io::{ self, Write };
 
-type Address = usize;
+pub type Address = usize;
 
 pub trait AddressLike {
     fn from_value(value: i32) -> Address;
@@ -15,7 +15,6 @@ impl AddressLike for Address {
 
 pub struct Hardware<'a> {
     memory: Vec<i32>,
-    program_counter: Address,
     input: Box<dyn 'a + FnMut() -> i32>,
     output: Box<dyn 'a + FnMut(i32)>,
 }
@@ -31,10 +30,25 @@ impl<'a> Hardware<'a> {
     {
         Hardware {
             memory: program,
-            program_counter: 0,
             input: Box::new(input),
             output: Box::new(output),
         }
+    }
+
+    pub fn read(&self, location: Address) -> i32 {
+        self.memory[location]
+    }
+
+    pub fn write(&mut self, location: Address, value: i32) {
+        self.memory[location] = value;
+    }
+
+    pub fn from_input(&mut self) -> i32 {
+        (self.input)()
+    }
+
+    pub fn to_output(&mut self, value: i32) {
+        (self.output)(value);
     }
 
     fn prompt() -> i32 {
@@ -49,25 +63,33 @@ impl<'a> Hardware<'a> {
     fn print(value: i32) {
         println!("PRINT: {}", value);
     }
+}
 
-    fn read(&self, location: Address) -> i32 {
-        self.memory[location]
+pub struct Computer<'a> {
+    hardware: Hardware<'a>,
+    program_counter: Address,
+}
+
+impl<'a> Computer<'a> {
+    pub fn new_with_terminal(program: Vec<i32>) -> Computer<'a> {
+        Computer {
+            hardware: Hardware::new_with_terminal(program),
+            program_counter: 0,
+        }
     }
 
-    fn write(&mut self, location: Address, value: i32) {
-        self.memory[location] = value;
-    }
-
-    fn from_input(&mut self) -> i32 {
-        (self.input)()
-    }
-
-    fn to_output(&mut self, value: i32) {
-        (self.output)(value);
+    pub fn new
+        <OutputFn: 'a + FnMut(i32), InputFn: 'a + FnMut() -> i32>
+        (program: Vec<i32>, input: InputFn, output: OutputFn) -> Computer<'a>
+    {
+        Computer {
+            hardware: Hardware::new(program, input, output),
+            program_counter: 0,
+        }
     }
 
     fn next_instruction(&self) -> Instruction {
-        self.read(self.program_counter).try_into().expect("Unknown opcode")
+        self.hardware.read(self.program_counter).try_into().expect("Unknown opcode")
     }
 
     fn argument(&self, nth: usize) -> (i32, ArgumentMode) {
@@ -76,13 +98,13 @@ impl<'a> Hardware<'a> {
 
     // Reads the value of the nth argument for the current instruction (0-based)
     fn argument_value(&self, nth: usize) -> i32 {
-        self.read(self.program_counter + nth + 1)
+        self.hardware.read(self.program_counter + nth + 1)
     }
 
     fn argument_mode(&self, nth: usize) -> ArgumentMode {
         // In a string representation, the last two digits of the instruction value
         // are the opcode (i.e. opcodes go from 0 to 99). We first remove those.
-        let mode_indicators = self.read(self.program_counter) / 100;
+        let mode_indicators = self.hardware.read(self.program_counter) / 100;
 
         // Then, the mode for the 0-based nth argument is the nth digit from the
         // right: the first argument is the units, second tenths, and so on.
@@ -110,7 +132,6 @@ impl<'a> Hardware<'a> {
     }
 
     fn step(&mut self) -> Instruction {
-        let current_program_counter = self.program_counter;
         let instruction = self.next_instruction();
 
         // Collect arguments
@@ -125,7 +146,7 @@ impl<'a> Hardware<'a> {
                         Argument::In(
                             match mode {
                                 ArgumentMode::Immediate => value,
-                                ArgumentMode::Indexed => self.read(Address::from_value(value)),
+                                ArgumentMode::Indexed => self.hardware.read(Address::from_value(value)),
                             }
                         )
                     },
@@ -138,12 +159,14 @@ impl<'a> Hardware<'a> {
             }).collect();
 
         // Run instruction
-        instruction.exec(&arguments, self);
+        let jump = instruction.exec(&arguments, &mut self.hardware);
 
-        // Move forward by consuming opcode and its arguments, but only if the
-        // instruction didn't already change the program counter
-        if current_program_counter == self.program_counter {
+        // Change program counter, advancing over the opcode and its arguments if the instruction
+        // didn't request a jump, or jumping if it did
+        if jump.is_none() {
             self.relative_jump_forward(1 + arguments.len());
+        } else {
+            self.absolute_jump(jump.unwrap())
         }
 
         instruction
@@ -258,8 +281,10 @@ impl Instruction {
     }
 
     // Execute an instruction on a hardware
-    fn exec(&self, arguments: &[Argument], hardware: &mut Hardware) {
+    fn exec(&self, arguments: &[Argument], hardware: &mut Hardware) -> Option<Address> {
         use Instruction::*;
+
+        let mut jump = None;
 
         match self {
             Add | Mul | LessThan | Equals => {
@@ -289,7 +314,7 @@ impl Instruction {
                     let destination = Address::from_value(arguments[1].get_input());
 
                     if condition(value) {
-                        hardware.absolute_jump(destination);
+                        jump = Some(destination);
                     }
                 };
 
@@ -310,6 +335,8 @@ impl Instruction {
                     println!("HALT");
               },
         }
+
+        jump
     }
 }
 
@@ -318,11 +345,11 @@ mod instructions {
     use super::*;
 
     fn step(program: Vec<i32>, expected_instr: Instruction, expected_memory: Vec<i32>) {
-        let mut computer = Hardware::new_with_terminal(program);
+        let mut computer = Computer::new_with_terminal(program);
         let instruction = computer.step();
 
         assert_eq!(instruction, expected_instr);
-        assert_eq!(computer.memory, expected_memory);
+        assert_eq!(computer.hardware.memory, expected_memory);
     }
 
     #[test]
@@ -337,9 +364,9 @@ mod programs {
     use super::*;
 
     fn run(program: Vec<i32>, expected_memory: Vec<i32>) {
-        let mut computer = Hardware::new_with_terminal(program);
+        let mut computer = Computer::new_with_terminal(program);
         computer.run();
-        assert_eq!(computer.memory, expected_memory);
+        assert_eq!(computer.hardware.memory, expected_memory);
     }
 
     #[test]
@@ -365,7 +392,7 @@ mod programs_io {
             // Scope mutable access to output_values
             let output = |value| output_values.push(value);
 
-            let mut computer = Hardware::new(program.clone(), input, output);
+            let mut computer = Computer::new(program.clone(), input, output);
             computer.run();
         }
         assert_eq!(output_values, expected_output);
