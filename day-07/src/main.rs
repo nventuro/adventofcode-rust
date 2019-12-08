@@ -1,10 +1,12 @@
-mod computer;
-use computer::Computer as Computer;
-
+use std::thread;
+use std::sync::mpsc::{ self, Sender, Receiver };
 use std::fs;
 
 extern crate itertools;
 use itertools::Itertools;
+
+mod computer;
+use computer::Computer as Computer;
 
 fn main() {
     let filename = "input";
@@ -21,38 +23,122 @@ fn process(input: String) {
         .collect();
 
 
-    let highest = (0..5).permutations(5)
+    let highest = (5..10).permutations(5)
         .map(|phase_sequence| run_phase_sequence(program.clone(), phase_sequence))
         .max();
 
     println!("Highest signal: {}", highest.unwrap());
 }
 
-fn run_phase_sequence(program: Vec<i32>, phase_sequence: Vec<i32>) -> i32 {
-    let mut previous_output_signal = 0;
+struct Amplifier {
+    phase: i32,
+    tx: Option::<Sender::<i32>>,
+    rx: Option::<Receiver::<i32>>,
+}
 
-    for phase in phase_sequence {
-        let mut output_signal = 0;
-        {
+impl Amplifier {
+    fn new(phase: i32) -> Amplifier {
+        Amplifier { phase, tx: None, rx: None }
+    }
+
+    fn set_tx(&mut self, tx: Sender::<i32>) {
+        self.tx = Some(tx);
+    }
+
+    fn set_rx(&mut self, rx: Receiver::<i32>) {
+        self.rx = Some(rx);
+    }
+
+    fn run(&mut self, program: Vec<i32>, out_tx: Option<Sender<i32>>) -> thread::JoinHandle<()> {
+        let phase = self.phase;
+        let tx = self.tx.take().unwrap();
+        let rx = self.rx.take().unwrap();
+
+        thread::spawn(move || {
             let mut phase_queried = false;
+
             let input = || {
                 if !phase_queried {
                     phase_queried = true;
                     phase
                 } else {
-                    previous_output_signal
+                    rx.recv().unwrap()
                 }
             };
 
-            let mut computer = Computer::new(program.clone(), input, |value| output_signal = value);
-            computer.run();
-        }
+            let output = |out_signal: i32| {
+                // This will fail for the last output of the last amplifier, since the first one
+                // will have closed the channel
+                let _ = tx.send(out_signal);
 
-        println!("{:?}", output_signal);
-        previous_output_signal = output_signal;
+                if out_tx.is_some() {
+                    out_tx.as_ref().unwrap().send(out_signal).unwrap();
+                }
+            };
+
+            let mut computer = Computer::new(program, input, output);
+            computer.run();
+        })
+    }
+}
+
+fn run_phase_sequence(program: Vec<i32>, phase_sequence: Vec<i32>) -> i32 {
+    let mut amplifiers = setup_amplifiers(phase_sequence);
+
+    // Clone the tx for the channel the first amplifier reads from
+    let tx_start = amplifiers[amplifiers.len() - 1].tx.as_ref().unwrap().clone();
+
+    // Create a new channel from the last amplifier to the outside world
+    let (tx, rx) = mpsc::channel();
+
+    let mut threads = Vec::<thread::JoinHandle<()>>::new();
+
+    let total_amplifiers = amplifiers.len();
+
+    // The first n-1 amplifiers are started regularly
+    for mut amplifier in amplifiers.drain(0..total_amplifiers-1) {
+        threads.push(amplifier.run(program.clone(), None));
     }
 
-    previous_output_signal
+    // But the last one is fed the tx to the channel we receive from
+    assert_eq!(amplifiers.len(), 1);
+    threads.push(amplifiers[0].run(program.clone(), Some(tx)));
+
+    // Kickstart process by sending initial signal to the first amplifier
+    tx_start.send(0).unwrap();
+
+    // Store received values
+    let mut values = Vec::<i32>::new();
+    for received in rx {
+        values.push(received);
+    }
+
+    // All threads should've finished by now (since the last one closed the channel), so this
+    // shouldn't be necessary
+    for thread in threads {
+        thread.join().unwrap();
+    }
+
+    // Return the last received value
+    *values.iter().last().unwrap()
+}
+
+fn setup_amplifiers(phase_sequence: Vec<i32>) -> Vec<Amplifier> {
+    let mut amplifiers: Vec<Amplifier> = phase_sequence.iter()
+        .map(|phase| Amplifier::new(*phase))
+        .collect();
+
+    let total_amplifiers = amplifiers.len();
+
+    for i in 0..total_amplifiers {
+        let (tx, rx) = mpsc::channel();
+
+        // Connect each amplifier's tx to the next one's rx
+        amplifiers[i].set_tx(tx);
+        amplifiers[(i + 1) % total_amplifiers].set_rx(rx);
+    }
+
+    amplifiers
 }
 
 #[cfg(test)]
@@ -60,7 +146,7 @@ mod sequencer {
     use super::*;
 
     #[test]
-    fn test_sequences() {
+    fn test_basic_sequences() {
         assert_eq!(
             run_phase_sequence(
                 vec![3,15,3,16,1002,16,10,16,1,16,15,15,4,15,99,0,0],
@@ -86,6 +172,30 @@ mod sequencer {
                 ],
                 vec![1,0,4,3,2]
             ), 65210
+        );
+    }
+
+    #[test]
+    fn test_looped_sequences() {
+        assert_eq!(
+            run_phase_sequence(
+                vec![
+                    3,26,1001,26,-4,26,3,27,1002,27,2,27,1,27,26,
+                    27,4,27,1001,28,-1,28,1005,28,6,99,0,0,5
+                ],
+                vec![9,8,7,6,5]
+            ), 139629729
+        );
+
+        assert_eq!(
+            run_phase_sequence(
+                vec![
+                    3,52,1001,52,-5,52,3,53,1,52,56,54,1007,54,5,55,1005,55,26,1001,54,
+                    -5,54,1105,1,12,1,53,54,53,1008,54,0,55,1001,55,1,55,2,53,55,53,4,
+                    53,1001,56,-1,56,1005,56,6,99,0,0,0,0,10
+                ],
+                vec![9,7,8,5,6]
+            ), 18216
         );
     }
 }

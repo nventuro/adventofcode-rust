@@ -79,7 +79,7 @@ impl<'a> Computer<'a> {
     }
 
     pub fn new
-        <OutputFn: 'a + FnMut(i32), InputFn: 'a + FnMut() -> i32>
+        <InputFn: 'a + FnMut() -> i32, OutputFn: 'a + FnMut(i32)>
         (program: Vec<i32>, input: InputFn, output: OutputFn) -> Computer<'a>
     {
         Computer {
@@ -122,8 +122,6 @@ impl<'a> Computer<'a> {
     }
 
     pub fn run(&mut self) {
-        println!("BEGIN");
-
         loop {
             if self.step() == Instruction::Halt {
                 break;
@@ -331,9 +329,7 @@ impl Instruction {
               Print => {
                     hardware.to_output(arguments[0].get_input());
               },
-              Halt => {
-                    println!("HALT");
-              },
+              Halt => {},
         }
 
         jump
