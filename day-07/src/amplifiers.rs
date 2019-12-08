@@ -46,8 +46,8 @@ impl Amplifier {
                 // will have closed the channel
                 let _ = tx.send(out_signal);
 
-                if out_tx.is_some() {
-                    out_tx.as_ref().unwrap().send(out_signal).unwrap();
+                if let Some(out) = out_tx.as_ref() {
+                    out.send(out_signal).unwrap();
                 }
             };
 
@@ -61,10 +61,7 @@ pub fn run_phase_sequence(program: Vec<i32>, phase_sequence: Vec<i32>) -> i32 {
     let mut amplifiers = setup_amplifiers(phase_sequence);
 
     // Clone the tx for the channel the first amplifier reads from
-    let tx_start = amplifiers[amplifiers.len() - 1].tx.as_ref().unwrap().clone();
-
-    // Create a new channel from the last amplifier to the outside world
-    let (tx, rx) = mpsc::channel();
+    let tx_start = amplifiers[amplifiers.len() - 1].tx.clone().unwrap();
 
     let mut threads = Vec::<thread::JoinHandle<()>>::new();
 
@@ -75,7 +72,10 @@ pub fn run_phase_sequence(program: Vec<i32>, phase_sequence: Vec<i32>) -> i32 {
         threads.push(amplifier.run(program.clone(), None));
     }
 
-    // But the last one is fed the tx to the channel we receive from
+    // Create a new channel from the last amplifier to the outside world
+    let (tx, rx) = mpsc::channel();
+
+    // The last amplifier is fed the tx to the channel we receive from
     assert_eq!(amplifiers.len(), 1);
     threads.push(amplifiers[0].run(program.clone(), Some(tx)));
 
@@ -99,9 +99,10 @@ pub fn run_phase_sequence(program: Vec<i32>, phase_sequence: Vec<i32>) -> i32 {
 }
 
 fn setup_amplifiers(phase_sequence: Vec<i32>) -> Vec<Amplifier> {
-    let mut amplifiers: Vec<Amplifier> = phase_sequence.iter()
+    let mut amplifiers = phase_sequence
+        .iter()
         .map(|phase| Amplifier::new(*phase))
-        .collect();
+        .collect::<Vec<Amplifier>>();
 
     let total_amplifiers = amplifiers.len();
 
