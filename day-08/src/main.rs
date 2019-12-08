@@ -1,3 +1,5 @@
+use std::io::{ self, Write };
+use core::convert::{ TryInto, TryFrom };
 use std::fs;
 
 fn main() {
@@ -6,39 +8,93 @@ fn main() {
         |_| panic!("Failed to read from file '{}'", filename)
     );
 
-    let result = process(&contents, 25, 6);
-    println!("Result: {}", result);
+    process(&contents, 25, 6);
+}
+
+#[derive(PartialEq)]
+#[derive(Debug)]
+enum Color {
+    Black,
+    White,
+    Transparent,
+}
+
+impl TryFrom<u8> for Color {
+    type Error = u8;
+
+    fn try_from(x: u8) -> Result<Self, Self::Error> {
+        let character = x as char;
+        match character {
+            '0' => Ok(Color::Black),
+            '1' => Ok(Color::White),
+            '2' => Ok(Color::Transparent),
+            _ => Err(x),
+        }
+    }
 }
 
 #[derive(Debug)]
-struct Layer<'a> {
-    contents: &'a[u8],
+struct Layer {
+    contents: Vec<Color>,
 }
 
-impl<'a> Layer<'a> {
-    fn from_input(input: &'a str, width: usize, height: usize) -> Vec<Layer<'a>> {
+impl Layer {
+    fn new(bytes: &[u8]) -> Layer {
+        Layer{ contents: bytes.iter().map(|byte| (*byte).try_into().unwrap()).collect() }
+    }
+
+    fn from_input(input: &str, width: usize, height: usize) -> Vec<Layer> {
         input
             .as_bytes()
             .chunks_exact(width * height)
-            .map(|contents| Layer { contents })
+            .map(|contents| Layer::new(contents))
             .collect()
     }
 
-    fn char_count(&self, character: char) -> usize {
+    fn color_count(&self, color: Color) -> usize {
         self.contents
             .iter()
-            .filter(|value| **value as char == character)
+            .filter(|pixel| **pixel == color)
             .count()
     }
 }
 
-fn process(input: &str, width: usize, height: usize) -> usize {
+fn process(input: &str, width: usize, height: usize) {
     let layers = Layer::from_input(input, width, height);
 
     let fewest_zeroes_layer = layers
         .iter()
-        .min_by_key(|layer| layer.char_count('0'))
+        .min_by_key(|layer| layer.color_count(Color::Black))
         .unwrap();
 
-    fewest_zeroes_layer.char_count('1') * fewest_zeroes_layer.char_count('2')
+    // Test correctness
+    assert_eq!(
+        fewest_zeroes_layer.color_count(Color::White) * fewest_zeroes_layer.color_count(Color::Transparent),
+        2159
+    );
+
+    let picture = (0..width * height).
+        map(|pixel_num| layers.iter().find_map(|layer| {
+            let color = &layer.contents[pixel_num];
+            if *color != Color::Transparent {
+                Some(color)
+            } else {
+                None
+            }
+        }))
+        .collect::<Vec::<Option::<&Color>>>();
+
+    for row in picture.as_slice().chunks_exact(width) {
+        for pixel in row {
+            let draw = match pixel.unwrap() {
+                Color::Black => " ",
+                Color::White => "X",
+                _ => unreachable!("Pictures cannot have transparent colors"),
+            };
+
+            print!("{}", draw);
+        }
+        print!("\n");
+        io::stdout().flush().unwrap();
+    }
 }
