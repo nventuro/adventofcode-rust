@@ -31,6 +31,10 @@ Improve Day 2 computer by adding generic IO, comparisons and jumps.
 
 Use multiple Day 5 computers in threads, with their IO being connected accross threads.
 
+### [Day 8 - Image Decoding](https://github.com/nventuro/adventofcode-rust/tree/master/day-08)
+
+Decode and print a binary image. Usage of iterators, `chucks_exact`, `min_by_key`, among others.
+
 ## License
 
 [MIT](LICENSE)
