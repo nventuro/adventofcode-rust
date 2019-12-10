@@ -13,7 +13,7 @@ pub struct Computer<'a> {
 }
 
 impl<'a> Computer<'a> {
-    pub fn new_with_terminal(program: Vec<i32>) -> Computer<'a> {
+    pub fn new_with_terminal(program: Vec<Value>) -> Computer<'a> {
         Computer {
             hardware: Hardware::new_with_terminal(program),
             program_counter: 0,
@@ -22,8 +22,8 @@ impl<'a> Computer<'a> {
     }
 
     pub fn new
-        <InputFn: 'a + FnMut() -> i32, OutputFn: 'a + FnMut(i32)>
-        (program: Vec<i32>, input: InputFn, output: OutputFn) -> Computer<'a>
+        <InputFn: 'a + FnMut() -> Value, OutputFn: 'a + FnMut(Value)>
+        (program: Vec<Value>, input: InputFn, output: OutputFn) -> Computer<'a>
     {
         Computer {
             hardware: Hardware::new(program, input, output),
@@ -36,12 +36,12 @@ impl<'a> Computer<'a> {
         self.hardware.read(self.program_counter).try_into().expect("Unknown opcode")
     }
 
-    fn argument(&self, nth: usize) -> (i32, ArgumentMode) {
+    fn argument(&self, nth: usize) -> (Value, ArgumentMode) {
         (self.argument_value(nth), self.argument_mode(nth))
     }
 
     // Reads the value of the nth argument for the current instruction (0-based)
-    fn argument_value(&self, nth: usize) -> i32 {
+    fn argument_value(&self, nth: usize) -> Value {
         self.hardware.read(self.program_counter + nth + 1)
     }
 
@@ -52,7 +52,7 @@ impl<'a> Computer<'a> {
 
         // Then, the mode for the 0-based nth argument is the nth digit from the
         // right: the first argument is the units, second tenths, and so on.
-        let mode_indicator = (mode_indicators / 10_i32.pow(nth.try_into().unwrap())) % 10;
+        let mode_indicator = (mode_indicators / 10_i64.pow(nth.try_into().unwrap())) % 10;
 
         mode_indicator.try_into().unwrap()
     }
@@ -65,7 +65,7 @@ impl<'a> Computer<'a> {
         self.program_counter = destination;
     }
 
-    fn move_relative_base(&mut self, change: i32) {
+    fn move_relative_base(&mut self, change: Value) {
         if change > 0 {
             self.relative_base += usize::try_from(change).unwrap();
         } else {
@@ -97,7 +97,7 @@ impl<'a> Computer<'a> {
                             match mode {
                                 ArgumentMode::Immediate => value,
                                 ArgumentMode::Indexed => self.hardware.read(Address::from_value(value)),
-                                ArgumentMode::Relative => self.hardware.read(self.relative_base + Address::from_value(value)),
+                                ArgumentMode::Relative => self.hardware.read(Address::from_value(Value::try_from(self.relative_base).unwrap() + value)),
                             }
                         )
                     },
@@ -106,7 +106,7 @@ impl<'a> Computer<'a> {
                             match mode {
                                 ArgumentMode::Immediate => panic!("Out arguments cannot be immediate"),
                                 ArgumentMode::Indexed => Address::from_value(value),
-                                ArgumentMode::Relative => self.relative_base + Address::from_value(value),
+                                ArgumentMode::Relative => Address::from_value(Value::try_from(self.relative_base).unwrap() + value),
                             }
                         )
                     },
@@ -129,7 +129,6 @@ impl<'a> Computer<'a> {
             self.move_relative_base(change);
         }
 
-
         instruction
     }
 }
@@ -138,7 +137,7 @@ impl<'a> Computer<'a> {
 mod instructions {
     use super::*;
 
-    fn step(program: Vec<i32>, expected_instr: Instruction, expected_memory: Vec<i32>) {
+    fn step(program: Vec<Value>, expected_instr: Instruction, expected_memory: Vec<Value>) {
         let mut computer = Computer::new_with_terminal(program);
         let instruction = computer.step();
 
@@ -161,7 +160,7 @@ mod instructions {
 mod programs {
     use super::*;
 
-    fn run(program: Vec<i32>, expected_memory: Vec<i32>) {
+    fn run(program: Vec<Value>, expected_memory: Vec<Value>) {
         let mut computer = Computer::new_with_terminal(program);
         computer.run();
 
@@ -188,7 +187,7 @@ mod programs {
 mod programs_io {
     use super::*;
 
-    fn run_io<InputFn: FnMut() -> i32>(program: &Vec<i32>, input: InputFn, expected_output: Vec<i32>) {
+    fn run_io<InputFn: FnMut() -> Value>(program: &Vec<Value>, input: InputFn, expected_output: &Vec<Value>) {
         let mut output_values = Vec::new();
         {
             // Scope mutable access to output_values
@@ -197,64 +196,64 @@ mod programs_io {
             let mut computer = Computer::new(program.clone(), input, output);
             computer.run();
         }
-        assert_eq!(output_values, expected_output);
+        assert_eq!(output_values, *expected_output);
     }
 
     #[test]
-    fn basic_io() { run_io(&vec![3,0,4,0,99], || 5, vec![5]) }
+    fn basic_io() { run_io(&vec![3,0,4,0,99], || 5, &vec![5]) }
 
     #[test]
     fn io_equal_position_mode() {
         // Test if input equals 8
         let program = vec![3,9,8,9,10,9,4,9,99,-1,8];
-        run_io(&program, || 7, vec![0]);
-        run_io(&program, || 8, vec![1]);
-        run_io(&program, || 9, vec![0]);
+        run_io(&program, || 7, &vec![0]);
+        run_io(&program, || 8, &vec![1]);
+        run_io(&program, || 9, &vec![0]);
     }
 
     #[test]
     fn io_equal_immediate_mode() {
         // Test if input equals 8
         let program = vec![3,3,1108,-1,8,3,4,3,99];
-        run_io(&program, || 7, vec![0]);
-        run_io(&program, || 8, vec![1]);
-        run_io(&program, || 9, vec![0]);
+        run_io(&program, || 7, &vec![0]);
+        run_io(&program, || 8, &vec![1]);
+        run_io(&program, || 9, &vec![0]);
     }
 
     #[test]
     fn io_less_than_position_mode() {
         // Test if input is less than 8
         let program = vec![3,9,7,9,10,9,4,9,99,-1,8];
-        run_io(&program, || 6, vec![1]);
-        run_io(&program, || 7, vec![1]);
-        run_io(&program, || 8, vec![0]);
+        run_io(&program, || 6, &vec![1]);
+        run_io(&program, || 7, &vec![1]);
+        run_io(&program, || 8, &vec![0]);
     }
 
     #[test]
     fn io_less_than_immediate_mode() {
         // Test if input is less than 8
         let program = vec![3,3,1107,-1,8,3,4,3,99];
-        run_io(&program, || 6, vec![1]);
-        run_io(&program, || 7, vec![1]);
-        run_io(&program, || 8, vec![0]);
+        run_io(&program, || 6, &vec![1]);
+        run_io(&program, || 7, &vec![1]);
+        run_io(&program, || 8, &vec![0]);
     }
 
     #[test]
     fn io_jump_position_mode() {
         // Test if input is true
         let program = vec![3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9];
-        run_io(&program, || 0, vec![0]);
-        run_io(&program, || 1, vec![1]);
-        run_io(&program, || 2, vec![1]);
+        run_io(&program, || 0, &vec![0]);
+        run_io(&program, || 1, &vec![1]);
+        run_io(&program, || 2, &vec![1]);
     }
 
     #[test]
     fn io_jump_immediate_mode() {
         // Test if input is true
         let program = vec![3,3,1105,-1,9,1101,0,0,12,4,12,99,1];
-        run_io(&program, || 0, vec![0]);
-        run_io(&program, || 1, vec![1]);
-        run_io(&program, || 2, vec![1]);
+        run_io(&program, || 0, &vec![0]);
+        run_io(&program, || 1, &vec![1]);
+        run_io(&program, || 2, &vec![1]);
     }
 
     #[test]
@@ -266,10 +265,37 @@ mod programs_io {
             999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99
         ];
 
-        run_io(&program, || 6, vec![999]);
-        run_io(&program, || 7, vec![999]);
-        run_io(&program, || 8, vec![1000]);
-        run_io(&program, || 9, vec![1001]);
-        run_io(&program, || 10, vec![1001]);
+        run_io(&program, || 6, &vec![999]);
+        run_io(&program, || 7, &vec![999]);
+        run_io(&program, || 8, &vec![1000]);
+        run_io(&program, || 9, &vec![1001]);
+        run_io(&program, || 10, &vec![1001]);
+    }
+
+    #[test]
+    fn large_memory_relative_base_quine() {
+        let program = vec![
+            109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99
+        ];
+
+        run_io(&program, || 0, &program);
+    }
+
+    #[test]
+    fn compute_large_number() {
+        let program = vec![
+            1102,34915192,34915192,7,4,7,99,0
+        ];
+
+        run_io(&program, || 0, &vec![1219070632396864]);
+    }
+
+    #[test]
+    fn output_large_number() {
+        let program = vec![
+            104,1125899906842624,99
+        ];
+
+        run_io(&program, || 0, &vec![1125899906842624]);
     }
 }

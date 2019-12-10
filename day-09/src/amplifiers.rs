@@ -6,25 +6,25 @@ mod computer;
 use computer::Computer as Computer;
 
 struct Amplifier {
-    phase: i32,
-    tx: Option::<Sender::<i32>>,
-    rx: Option::<Receiver::<i32>>,
+    phase: i64,
+    tx: Option::<Sender::<i64>>,
+    rx: Option::<Receiver::<i64>>,
 }
 
 impl Amplifier {
-    fn new(phase: i32) -> Amplifier {
+    fn new(phase: i64) -> Amplifier {
         Amplifier { phase, tx: None, rx: None }
     }
 
-    fn set_tx(&mut self, tx: Sender::<i32>) {
+    fn set_tx(&mut self, tx: Sender::<i64>) {
         self.tx = Some(tx);
     }
 
-    fn set_rx(&mut self, rx: Receiver::<i32>) {
+    fn set_rx(&mut self, rx: Receiver::<i64>) {
         self.rx = Some(rx);
     }
 
-    fn run(&mut self, program: Vec<i32>, out_tx: Option<Sender<i32>>) -> thread::JoinHandle<()> {
+    fn run(&mut self, program: Vec<i64>, out_tx: Option<Sender<i64>>) -> thread::JoinHandle<()> {
         let phase = self.phase;
         let tx = self.tx.take().unwrap();
         let rx = self.rx.take().unwrap();
@@ -41,7 +41,7 @@ impl Amplifier {
                 }
             };
 
-            let output = |out_signal: i32| {
+            let output = |out_signal: i64| {
                 // This will fail for the last output of the last amplifier, since the first one
                 // will have closed the channel
                 let _ = tx.send(out_signal);
@@ -57,7 +57,7 @@ impl Amplifier {
     }
 }
 
-pub fn run_phase_sequence(program: Vec<i32>, phase_sequence: Vec<i32>) -> i32 {
+pub fn run_phase_sequence(program: Vec<i64>, phase_sequence: Vec<i64>) -> i64 {
     let mut amplifiers = setup_amplifiers(phase_sequence);
 
     // Clone the tx for the channel the first amplifier reads from
@@ -83,7 +83,7 @@ pub fn run_phase_sequence(program: Vec<i32>, phase_sequence: Vec<i32>) -> i32 {
     tx_start.send(0).unwrap();
 
     // Store received values
-    let mut values = Vec::<i32>::new();
+    let mut values = Vec::<i64>::new();
     for received in rx {
         values.push(received);
     }
@@ -98,7 +98,7 @@ pub fn run_phase_sequence(program: Vec<i32>, phase_sequence: Vec<i32>) -> i32 {
     *values.iter().last().unwrap()
 }
 
-fn setup_amplifiers(phase_sequence: Vec<i32>) -> Vec<Amplifier> {
+fn setup_amplifiers(phase_sequence: Vec<i64>) -> Vec<Amplifier> {
     let mut amplifiers = phase_sequence
         .iter()
         .map(|phase| Amplifier::new(*phase))

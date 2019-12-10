@@ -15,8 +15,8 @@ fn main() {
 }
 
 fn process(input: String) {
-    let program: Vec<i32> = input.split(",")
-        .map(|x| x.trim().parse::<i32>().unwrap())
+    let program: Vec<_> = input.split(",")
+        .map(|x| x.trim().parse::<i64>().unwrap())
         .collect();
 
     let highest = (5..10).permutations(5)

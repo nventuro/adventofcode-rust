@@ -37,15 +37,15 @@ pub enum ArgumentMode {
 // to be used as an Argument.
 #[derive(Debug)]
 pub enum Argument {
-    In(i32),
+    In(Value),
     Out(Address),
 }
 
 // Map indicators to argument modes
-impl TryFrom<i32> for ArgumentMode {
-    type Error = i32;
+impl TryFrom<Value> for ArgumentMode {
+    type Error = Value;
 
-    fn try_from(x: i32) -> Result<Self, Self::Error> {
+    fn try_from(x: Value) -> Result<Self, Self::Error> {
         match x {
             0 => Ok(ArgumentMode::Indexed),
             1 => Ok(ArgumentMode::Immediate),
@@ -57,7 +57,7 @@ impl TryFrom<i32> for ArgumentMode {
 
 impl Argument {
     // Extracts in-value or fails
-    fn get_input(&self) -> i32 {
+    fn get_input(&self) -> Value {
         match self {
             Argument::In(input) => *input,
             _ => panic!("Non-input argument: {:?}", self),
@@ -74,10 +74,10 @@ impl Argument {
 }
 
 // Map value (opcode) to instruction
-impl TryFrom<i32> for Instruction {
-    type Error = i32;
+impl TryFrom<Value> for Instruction {
+    type Error = Value;
 
-    fn try_from(x: i32) -> Result<Self, Self::Error> {
+    fn try_from(x: Value) -> Result<Self, Self::Error> {
         use Instruction::*;
 
         // Opcodes go from 0 to 99, the rest of the value sets the argument modes
@@ -99,7 +99,7 @@ impl TryFrom<i32> for Instruction {
 
 pub enum RegisterChange {
     ProgramCounter{ new_value: Address },
-    RelativeBase{ change: i32 },
+    RelativeBase{ change: Value },
 }
 
 impl Instruction {
@@ -132,7 +132,7 @@ impl Instruction {
             Add | Mul | LessThan | Equals => {
                 // Implements an instruction that consists of a binary operation that
                 // writes its result to memory
-                let mut write_binary_operation = |operation: fn(i32, i32) -> i32| {
+                let mut write_binary_operation = |operation: fn(Value, Value) -> Value| {
                     let lhs = arguments[0].get_input();
                     let rhs = arguments[1].get_input();
                     let destination = arguments[2].get_output();
@@ -151,7 +151,7 @@ impl Instruction {
             JumpIfTrue | JumpIfFalse => {
                 // Implements an instruction that performs an absolute jump if a
                 // function applied on a value is true
-                let mut jump_if = |condition: fn(i32) -> bool| {
+                let mut jump_if = |condition: fn(Value) -> bool| {
                     let value = arguments[0].get_input();
                     let destination = Address::from_value(arguments[1].get_input());
 
@@ -167,7 +167,7 @@ impl Instruction {
                 }
             },
             RelativeBaseOffset => {
-                register_change = Some(RegisterChange::RelativeBase{ change: hardware.from_input() });
+                register_change = Some(RegisterChange::RelativeBase{ change: arguments[0].get_input() });
             },
             Prompt => {
                 let input = hardware.from_input();
