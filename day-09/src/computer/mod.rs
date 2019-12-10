@@ -1,4 +1,4 @@
-use core::convert::{ TryInto };
+use core::convert::{ TryInto, TryFrom };
 
 mod hardware;
 use hardware::*;
@@ -9,6 +9,7 @@ use instruction::*;
 pub struct Computer<'a> {
     hardware: Hardware<'a>,
     program_counter: Address,
+    relative_base: Address,
 }
 
 impl<'a> Computer<'a> {
@@ -16,6 +17,7 @@ impl<'a> Computer<'a> {
         Computer {
             hardware: Hardware::new_with_terminal(program),
             program_counter: 0,
+            relative_base: 0,
         }
     }
 
@@ -26,6 +28,7 @@ impl<'a> Computer<'a> {
         Computer {
             hardware: Hardware::new(program, input, output),
             program_counter: 0,
+            relative_base: 0,
         }
     }
 
@@ -62,6 +65,14 @@ impl<'a> Computer<'a> {
         self.program_counter = destination;
     }
 
+    fn move_relative_base(&mut self, change: i32) {
+        if change > 0 {
+            self.relative_base += usize::try_from(change).unwrap();
+        } else {
+            self.relative_base -= usize::try_from(-change).unwrap();
+        }
+    }
+
     pub fn run(&mut self) {
         loop {
             if self.step() == Instruction::Halt {
@@ -86,27 +97,38 @@ impl<'a> Computer<'a> {
                             match mode {
                                 ArgumentMode::Immediate => value,
                                 ArgumentMode::Indexed => self.hardware.read(Address::from_value(value)),
+                                ArgumentMode::Relative => self.hardware.read(self.relative_base + Address::from_value(value)),
                             }
                         )
                     },
                     ArgumentType::Out => {
-                        // Out arguments can only be indexed
-                        assert_eq!(mode, ArgumentMode::Indexed);
-                        Argument::Out(Address::from_value(value))
+                        Argument::Out(
+                            match mode {
+                                ArgumentMode::Immediate => panic!("Out arguments cannot be immediate"),
+                                ArgumentMode::Indexed => Address::from_value(value),
+                                ArgumentMode::Relative => self.relative_base + Address::from_value(value),
+                            }
+                        )
                     },
                 }
             }).collect();
 
         // Run instruction
-        let jump = instruction.exec(&arguments, &mut self.hardware);
+        let register_change = instruction.exec(&arguments, &mut self.hardware);
 
-        // Change program counter, advancing over the opcode and its arguments if the instruction
-        // didn't request a jump, or jumping if it did
-        if jump.is_none() {
-            self.relative_jump_forward(1 + arguments.len());
+        // An instruction may requests changes to certain registers as part of its operation, which
+        // are now carried out
+
+        if let Some(RegisterChange::ProgramCounter{ new_value }) = register_change {
+            self.absolute_jump(new_value);
         } else {
-            self.absolute_jump(jump.unwrap())
+            self.relative_jump_forward(1 + arguments.len());
         }
+
+        if let Some(RegisterChange::RelativeBase{ change }) = register_change {
+            self.move_relative_base(change);
+        }
+
 
         instruction
     }

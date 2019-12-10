@@ -14,6 +14,7 @@ pub enum Instruction {
     JumpIfFalse,
     LessThan,
     Equals,
+    RelativeBaseOffset,
     Halt,
 }
 
@@ -28,6 +29,7 @@ pub enum ArgumentType {
 pub enum ArgumentMode {
     Immediate, // The value itself is the argument
     Indexed, // The value is the address of the argument
+    Relative, // The value is at an address relative to a relative base
 }
 
 // In-values are just values, while out-values are addresses (where a value is stored).
@@ -47,6 +49,7 @@ impl TryFrom<i32> for ArgumentMode {
         match x {
             0 => Ok(ArgumentMode::Indexed),
             1 => Ok(ArgumentMode::Immediate),
+            2 => Ok(ArgumentMode::Relative),
             _ => Err(x),
         }
     }
@@ -75,45 +78,55 @@ impl TryFrom<i32> for Instruction {
     type Error = i32;
 
     fn try_from(x: i32) -> Result<Self, Self::Error> {
+        use Instruction::*;
+
         // Opcodes go from 0 to 99, the rest of the value sets the argument modes
         match x % 100 {
-            1 => Ok(Instruction::Add),
-            2 => Ok(Instruction::Mul),
-            3 => Ok(Instruction::Prompt),
-            4 => Ok(Instruction::Print),
-            5 => Ok(Instruction::JumpIfTrue),
-            6 => Ok(Instruction::JumpIfFalse),
-            7 => Ok(Instruction::LessThan),
-            8 => Ok(Instruction::Equals),
-            99 => Ok(Instruction::Halt),
+            1 => Ok(Add),
+            2 => Ok(Mul),
+            3 => Ok(Prompt),
+            4 => Ok(Print),
+            5 => Ok(JumpIfTrue),
+            6 => Ok(JumpIfFalse),
+            7 => Ok(LessThan),
+            8 => Ok(Equals),
+            9 => Ok(RelativeBaseOffset),
+            99 => Ok(Halt),
             _ => Err(x),
         }
     }
+}
+
+pub enum RegisterChange {
+    ProgramCounter{ new_value: Address },
+    RelativeBase{ change: i32 },
 }
 
 impl Instruction {
     // Map each instruction to its argument types
     pub fn argument_types(&self) -> Vec<ArgumentType> {
         use ArgumentType::*;
+        use Instruction::*;
 
         match self {
-            Instruction::Add => vec![In, In, Out],
-            Instruction::Mul => vec![In, In, Out],
-            Instruction::Prompt => vec![Out],
-            Instruction::Print => vec![In],
-            Instruction::JumpIfTrue => vec![In, In],
-            Instruction::JumpIfFalse => vec![In, In],
-            Instruction::LessThan => vec![In, In, Out],
-            Instruction::Equals => vec![In, In, Out],
-            Instruction::Halt => vec![],
+            Add => vec![In, In, Out],
+            Mul => vec![In, In, Out],
+            Prompt => vec![Out],
+            Print => vec![In],
+            JumpIfTrue => vec![In, In],
+            JumpIfFalse => vec![In, In],
+            LessThan => vec![In, In, Out],
+            Equals => vec![In, In, Out],
+            RelativeBaseOffset => vec![In],
+            Halt => vec![],
         }
     }
 
     // Execute an instruction on a hardware
-    pub fn exec(&self, arguments: &[Argument], hardware: &mut Hardware) -> Option<Address> {
+    pub fn exec(&self, arguments: &[Argument], hardware: &mut Hardware) -> Option<RegisterChange> {
         use Instruction::*;
 
-        let mut jump = None;
+        let mut register_change = None;
 
         match self {
             Add | Mul | LessThan | Equals => {
@@ -143,7 +156,7 @@ impl Instruction {
                     let destination = Address::from_value(arguments[1].get_input());
 
                     if condition(value) {
-                        jump = Some(destination);
+                        register_change = Some(RegisterChange::ProgramCounter{ new_value: destination });
                     }
                 };
 
@@ -153,16 +166,19 @@ impl Instruction {
                     _ => unreachable!("Missing match for conditional jump instruction {:?}", self),
                 }
             },
-              Prompt => {
-                    let input = hardware.from_input();
-                    hardware.write(arguments[0].get_output(), input);
-              },
-              Print => {
-                    hardware.to_output(arguments[0].get_input());
-              },
-              Halt => {},
+            RelativeBaseOffset => {
+                register_change = Some(RegisterChange::RelativeBase{ change: hardware.from_input() });
+            },
+            Prompt => {
+                let input = hardware.from_input();
+                hardware.write(arguments[0].get_output(), input);
+            },
+            Print => {
+                hardware.to_output(arguments[0].get_input());
+            },
+            Halt => {},
         }
 
-        jump
+        register_change
     }
 }
