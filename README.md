@@ -35,6 +35,10 @@ Use multiple Day 5 computers in threads, with their IO being connected accross t
 
 Decode and print a binary image. Usage of iterators, `chucks_exact`, `min_by_key`, among others.
 
+### [Day 9 - Complete Computer](https://github.com/nventuro/adventofcode-rust/tree/master/day-09)
+
+Finish Day 5 computer adding relative loading, 'infinute' memory (hash table based) and larger data types.
+
 ## License
 
 [MIT](LICENSE)
