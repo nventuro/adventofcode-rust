@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::{ self, Write };
 use core::convert::{ TryInto };
 
@@ -14,7 +15,7 @@ impl AddressLike for Address {
 }
 
 pub struct Hardware<'a> {
-    memory: Vec<i32>,
+    memory: HashMap<Address, i32>,
     input: Box<dyn 'a + FnMut() -> i32>,
     output: Box<dyn 'a + FnMut(i32)>,
 }
@@ -29,18 +30,18 @@ impl<'a> Hardware<'a> {
         (program: Vec<i32>, input: InputFn, output: OutputFn) -> Hardware<'a>
     {
         Hardware {
-            memory: program,
+            memory: program.into_iter().enumerate().collect(),
             input: Box::new(input),
             output: Box::new(output),
         }
     }
 
     pub fn read(&self, location: Address) -> i32 {
-        self.memory[location]
+        *self.memory.get(&location).unwrap_or(&0)
     }
 
     pub fn write(&mut self, location: Address, value: i32) {
-        self.memory[location] = value;
+        self.memory.insert(location, value);
     }
 
     pub fn from_input(&mut self) -> i32 {
