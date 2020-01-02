@@ -6,4 +6,3 @@ edition = "2018"
 
 [dependencies]
 termion = "*"
-device_query = "0.1.0"

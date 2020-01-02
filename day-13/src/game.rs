@@ -20,7 +20,7 @@ impl Position {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 enum Object {
     Empty,
     Wall,
@@ -68,7 +68,9 @@ struct Buffer {
 
 impl Buffer {
     fn new() -> Buffer {
-        Buffer{ data: Vec::with_capacity(3) }
+        Buffer {
+            data: Vec::with_capacity(3),
+        }
     }
 
     fn insert(&mut self, value: hardware::Value) -> Option<(Position, Data)> {
@@ -93,7 +95,7 @@ impl Buffer {
 }
 
 pub struct GameDisplay {
-    score: hardware::Value,
+    pub score: hardware::Value,
     objects: HashMap<Position, Object>,
     buffer: Buffer,
 }
@@ -139,15 +141,24 @@ impl GameDisplay {
 impl hardware::IO for GameDisplay {
     fn input(&mut self) -> hardware::Value {
         self.draw();
-        thread::sleep(time::Duration::from_millis(500));
+        thread::sleep(time::Duration::from_millis(50));
 
-        let device_state = DeviceState::new();
-        let keys = device_state.get_keys();
+        let (ball_position, _) = self
+            .objects
+            .iter()
+            .find(|(_position, object)| **object == Object::Ball)
+            .unwrap();
 
-        if keys.contains(&Keycode::A) {
-            -1
-        } else if keys.contains(&Keycode::D) {
+        let (paddle_position, _) = self
+            .objects
+            .iter()
+            .find(|(_position, object)| **object == Object::Paddle)
+            .unwrap();
+
+        if ball_position.x > paddle_position.x {
             1
+        } else if ball_position.x < paddle_position.x {
+            -1
         } else {
             0
         }
@@ -156,8 +167,12 @@ impl hardware::IO for GameDisplay {
     fn output(&mut self, value: hardware::Value) {
         if let Some((position, data)) = self.buffer.insert(value) {
             match data {
-                Data::Object(object) => { self.objects.insert(position, object); },
-                Data::Score(score) => { self.score = score; }
+                Data::Object(object) => {
+                    self.objects.insert(position, object);
+                }
+                Data::Score(score) => {
+                    self.score = score;
+                }
             }
         }
     }

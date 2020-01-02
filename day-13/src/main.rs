@@ -23,4 +23,6 @@ fn process(program: Vec<i64>) {
     let mut game_display = GameDisplay::new();
     let mut computer = Computer::new(program, Some(&mut game_display));
     computer.run();
+
+    println!("Final score: {:?}", game_display.score);
 }
