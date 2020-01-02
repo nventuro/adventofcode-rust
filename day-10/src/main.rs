@@ -1,9 +1,9 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::fs;
 use std::hash::{Hash, Hasher};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct Point {
     x: i32,
     y: i32,
@@ -16,35 +16,45 @@ impl Point {
 }
 
 #[derive(Debug)]
-struct LineOfSight {
-    x: i32,
-    y: i32,
+struct Segment {
+    x: f64,
+    y: f64,
 }
 
-impl LineOfSight {
-    fn from_points(source: &Point, target: &Point) -> LineOfSight {
-        LineOfSight {
-            x: target.x - source.x,
-            y: target.y - source.y,
+struct Angle {
+    value: f64,
+}
+
+impl Segment {
+    fn from_points(source: &Point, target: &Point) -> Segment {
+        Segment {
+            x: (target.x - source.x) as f64,
+            y: (target.y - source.y) as f64,
         }
     }
 
-    fn angle(&self) -> f64 {
-        (self.y as f64).atan2(self.x as f64)
+    fn angle(&self) -> Angle {
+        Angle {
+            value: self.y.atan2(self.x),
+        }
+    }
+
+    fn len_sq(&self) -> f64 {
+        self.x.powf(2_f64) + self.y.powf(2_f64)
     }
 }
 
-impl PartialEq for LineOfSight {
+impl PartialEq for Angle {
     fn eq(&self, other: &Self) -> bool {
-        (self.angle() - other.angle()).abs() < 0.0001
+        (self.value - other.value).abs() < 0.0001
     }
 }
 
-impl Eq for LineOfSight {}
+impl Eq for Angle {}
 
-impl Hash for LineOfSight {
+impl Hash for Angle {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        ((self.angle() * 10000_f64) as i32).hash(state);
+        ((self.value * 10000_f64) as i32).hash(state);
     }
 }
 
@@ -55,7 +65,23 @@ fn main() {
 
     let asteroids = get_asteroids(&contents);
 
-    println!("{:?}", get_max_asteroids_in_los(&asteroids));
+    let (station_asteroid, in_los) = get_max_asteroids_in_los(&asteroids);
+
+    println!(
+        "Asteroid at {:?} has {:?} asterioids in LoS",
+        station_asteroid, in_los
+    );
+
+    let other_asteroids = asteroids
+        .iter()
+        .filter(|asteroid| *asteroid != station_asteroid)
+        .map(|asteroid| Segment::from_points(station_asteroid, &asteroid))
+        .collect
+
+//    let by_angle = ::new();
+//    for asteroid in other_asteroids {
+//        let los = Segment::from_points(station_asteroid, &asteroid);
+//    }
 }
 
 fn get_asteroids(map: &str) -> Vec<Point> {
@@ -83,16 +109,16 @@ fn get_asteroids(map: &str) -> Vec<Point> {
 fn get_asteroids_in_los(from: &Point, asteroids: &Vec<Point>) -> usize {
     asteroids
         .iter()
-        .map(|asteroid| LineOfSight::from_points(from, asteroid))
+        .map(|asteroid| Segment::from_points(from, asteroid).angle())
         .collect::<HashSet<_>>()
         .len()
 }
 
-fn get_max_asteroids_in_los(asteroids: &Vec<Point>) -> usize {
+fn get_max_asteroids_in_los(asteroids: &Vec<Point>) -> (&Point, usize) {
     asteroids
         .iter()
-        .map(|asteroid| get_asteroids_in_los(asteroid, &asteroids))
-        .max()
+        .map(|asteroid| (asteroid, get_asteroids_in_los(asteroid, asteroids)))
+        .max_by_key(|(_asteroid, in_los)| *in_los)
         .unwrap()
 }
 
@@ -103,30 +129,30 @@ mod tests {
     #[test]
     fn test_map_a() {
         let map = ".#..#\n.....\n#####\n....#\n...##";
-        assert_eq!(get_max_asteroids_in_los(&get_asteroids(map)), 8);
+        assert_eq!(get_max_asteroids_in_los(&get_asteroids(map)).1, 8);
     }
 
     #[test]
     fn test_map_b() {
         let map = "......#.#.\n#..#.#....\n..#######.\n.#.#.###..\n.#..#.....\n..#....#.#\n#..#....#.\n.##.#..###\n##...#..#.\n.#....####";
-        assert_eq!(get_max_asteroids_in_los(&get_asteroids(map)), 33);
+        assert_eq!(get_max_asteroids_in_los(&get_asteroids(map)).1, 33);
     }
 
     #[test]
     fn test_map_c() {
         let map = "#.#...#.#.\n.###....#.\n.#....#...\n##.#.#.#.#\n....#.#.#.\n.##..###.#\n..#...##..\n..##....##\n......#...\n.####.###.";
-        assert_eq!(get_max_asteroids_in_los(&get_asteroids(map)), 35);
+        assert_eq!(get_max_asteroids_in_los(&get_asteroids(map)).1, 35);
     }
 
     #[test]
     fn test_map_d() {
         let map = ".#..#..###\n####.###.#\n....###.#.\n..###.##.#\n##.##.#.#.\n....###..#\n..#.#..#.#\n#..#.#.###\n.##...##.#\n.....#.#..";
-        assert_eq!(get_max_asteroids_in_los(&get_asteroids(map)), 41);
+        assert_eq!(get_max_asteroids_in_los(&get_asteroids(map)).1, 41);
     }
 
     #[test]
     fn test_map_e() {
         let map = ".#..##.###...#######\n##.############..##.\n.#.######.########.#\n.###.#######.####.#.\n#####.##.#.##.###.##\n..#####..#.#########\n####################\n#.####....###.#.#.##\n##.#################\n#####.##.###..####..\n..######..##.#######\n####.##.####...##..#\n.#####..#.######.###\n##...#.##########...\n#.##########.#######\n.####.#.###.###.#.##\n....##.##.###..#####\n.#.#.###########.###\n#.#.#.#####.####.###\n###.##.####.##.#..##";
-        assert_eq!(get_max_asteroids_in_los(&get_asteroids(map)), 210);
+        assert_eq!(get_max_asteroids_in_los(&get_asteroids(map)).1, 210);
     }
 }

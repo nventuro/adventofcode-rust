@@ -39,13 +39,17 @@ Decode and print a binary image. Usage of iterators, `chucks_exact`, `min_by_key
 
 Finish Day 5 computer adding relative loading, 'infinute' memory (hash table based) and larger data types.
 
+### [Day 10 - Asteroid Monitoring Station](https://github.com/nventuro/adventofcode-rust/tree/master/day-10)
+
+N^2 algorithms detecting asteroids blocked by line of sight.
+
 ### [Day 11 - Painting Robot](https://github.com/nventuro/adventofcode-rust/tree/master/day-11)
 
 Improve computer IO: create robot with sensors and motors that moves around.
 
 ### [Day 13 - Brickbreaker Game](https://github.com/nventuro/adventofcode-rust/tree/master/day-13)
 
-Use computer with improved IO to automatically play a brickbreaker game.
+Use computer with improved IO to automatically play a brickbreaker game. Usage of `termion` to handle console.
 
 ## License
 
