@@ -47,6 +47,10 @@ N^2 algorithms detecting asteroids blocked by line of sight.
 
 Improve computer IO: create robot with sensors and motors that moves around.
 
+### [Day 12 - N-Body Problem](https://github.com/nventuro/adventofcode-rust/tree/master/day-12)
+
+Nested arrays, intensive use of iterators, map and fold.
+
 ### [Day 13 - Brickbreaker Game](https://github.com/nventuro/adventofcode-rust/tree/master/day-13)
 
 Use computer with improved IO to automatically play a brickbreaker game. Usage of `termion` to handle console.
