@@ -76,17 +76,23 @@ struct UnidimensionalSystem {
     particles: Vec<Particle>,
 }
 
+fn extract<T>(elements: &mut [T], index: usize) -> (&mut T, impl Iterator<Item = &T>) {
+    let (before, remainder) = elements.split_at_mut(index);
+    let (extracted, after) = remainder.split_at_mut(1);
+
+    (&mut extracted[0], before.iter().chain(after.iter()))
+}
+
 impl UnidimensionalSystem {
     fn new(particles: Vec<Particle>) -> UnidimensionalSystem {
         UnidimensionalSystem { particles }
     }
 
     fn step(&mut self) {
-        let old_particles = self.particles.clone();
-
-        for particle in &mut self.particles {
-            for other_particle in &old_particles {
-                particle.gravitate(other_particle);
+        for i in 0..self.particles.len() {
+            let (particle, others) = extract(&mut self.particles, i);
+            for other in others {
+                particle.gravitate(other);
             }
         }
 
