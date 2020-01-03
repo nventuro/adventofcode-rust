@@ -83,6 +83,7 @@ fn extract<T>(elements: &mut [T], index: usize) -> (&mut T, impl Iterator<Item =
     (&mut extracted[0], before.iter().chain(after.iter()))
 }
 
+#[derive(Clone, Copy)]
 impl UnidimensionalSystem {
     fn new(particles: Vec<Particle>) -> UnidimensionalSystem {
         UnidimensionalSystem { particles }
@@ -122,7 +123,7 @@ impl System {
         assert_eq!(axes.len(), DIMENSIONS);
 
         System {
-            axes: [axes.remove(0), axes.remove(0), axes.remove(0)],
+            axes: [axes[0], axes[1], axes[2]],
             n_bodies: bodies.len(),
         }
     }
