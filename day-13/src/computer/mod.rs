@@ -7,7 +7,7 @@ use hardware::*;
 mod instruction;
 use instruction::*;
 
-struct Console {}
+struct Console;
 
 impl IO for Console {
     fn input(&mut self) -> Value {
@@ -24,7 +24,7 @@ impl IO for Console {
     }
 }
 
-static mut CONSOLE: Console = Console {};
+static mut CONSOLE: Console = Console;
 
 pub struct Computer<'hw> {
     hardware: Hardware<'hw>,
@@ -34,11 +34,11 @@ pub struct Computer<'hw> {
 
 impl Computer<'_> {
     pub fn new(program: Vec<Value>, io: Option<&mut dyn IO>) -> Computer {
-        let hardware = unsafe {
+        let hardware = Hardware::new(program, io.unwrap_or(
             // We need unsafe to get reference to the static console, but
             // multithreaded access to it is not an issue
-            Hardware::new(program, io.unwrap_or(&mut CONSOLE))
-        };
+            unsafe { &mut CONSOLE }
+        ));
 
         Computer {
             hardware,
