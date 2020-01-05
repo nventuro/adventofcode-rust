@@ -55,6 +55,10 @@ Nested arrays, intensive use of iterators, map and fold.
 
 Use computer with improved IO to automatically play a brickbreaker game. Usage of `termion` to handle console.
 
+### [Day 15 - Robot Maze](https://github.com/nventuro/adventofcode-rust/tree/master/day-15)
+
+Use computer to map maze using BFS. Lots of iterators, vectors and enums.
+
 ## License
 
 [MIT](LICENSE)
